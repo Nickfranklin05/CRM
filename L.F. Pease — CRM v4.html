@@ -1300,7 +1300,7 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
 
   const submit = () => {
     if(!form.name.trim() || !form.contact.trim()) { setErr("Lead Name and Contact are required."); return; }
-    addLead({...form, _importNote:"Imported from Access QuoteDB"});
+    addLead({...form, rep:"Unassigned", stage:"New Lead", _importNote:"Imported from Access QuoteDB"});
     onClose();
   };
 
