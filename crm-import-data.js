@@ -1,0 +1,1 @@
+window.__CRM_IMPORT_DATA = {data: {"name":"Moretti Pergola","contact":"Angela Moretti","phone":"(401) 555-8821","email":"amoretti@email.com","address":"54 Ocean Ave, Cranston, RI 02910","product":"Pergolas","source":"Referral","rep":"John","stage":"Quote Sent","value":13500,"notes":"Freestanding pergola over patio, wants fan mount.","referredBy":"Karen O'Brien"}, ts: Date.now()};

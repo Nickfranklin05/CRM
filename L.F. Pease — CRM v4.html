@@ -119,6 +119,7 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="crm-import-data.js"></script>
 <script type="text/babel">
 const {useState,useEffect,useCallback,useMemo,useRef} = React;
 
@@ -1078,6 +1079,74 @@ function AddModal({onClose,addLead}) {
   );
 }
 
+// ══════════════════════════
+// ── VIEW: NEW LEADS ──
+// ══════════════════════════
+
+function NewLeadsView({leads,update,setSelected,logActivity}) {
+  const newLeads = useMemo(()=>leads.filter(l=>l.stage==="New Lead").sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)),[leads]);
+  const unassigned = newLeads.filter(l=>!l.rep||l.rep==="Unassigned");
+  const assigned = newLeads.filter(l=>l.rep&&l.rep!=="Unassigned");
+
+  const assignRep = (id,rep) => {
+    update(id,{rep,stage:"Contacted"});
+    logActivity(id,{type:"note",text:`Assigned to ${rep} and moved to Contacted`,date:now(),by:rep});
+  };
+
+  const LeadRow = ({lead}) => (
+    <div className="card card-pad-sm mb-12 hover-scale" style={{cursor:"pointer",transition:"all .15s"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{flex:1}} onClick={()=>setSelected(lead.id)}>
+          <div className="fw-600" style={{fontSize:14}}>{lead.name}</div>
+          <div className="text-sm">{lead.contact}{lead.phone ? ` · ${lead.phone}` : ""}</div>
+          <div className="text-xs" style={{marginTop:2}}>{lead.product} · {lead.source}{lead.referredBy ? ` (${lead.referredBy})` : ""} · {fmt(lead.value)}</div>
+        </div>
+        <div style={{display:"flex",gap:4,flexShrink:0}}>
+          {REPS.filter(r=>r!=="Unassigned").map(r=>(
+            <button key={r} className="btn-action" onClick={()=>assignRep(lead.id,r)}
+              style={{background:lead.rep===r?"var(--primary)":"var(--bg)",color:lead.rep===r?"#fff":"var(--text)",border:"1px solid var(--border)",padding:"6px 12px"}}>
+              {r}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs" style={{width:60,textAlign:"right",flexShrink:0}}>{daysAgo(lead.createdAt)===0?"Today":daysAgo(lead.createdAt)+"d ago"}</div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="flex-between mb-20">
+        <div><div className="heading">New Leads</div><div className="text-sm" style={{marginTop:4}}>{newLeads.length} lead{newLeads.length!==1?"s":""} waiting to be assigned</div></div>
+      </div>
+
+      {newLeads.length===0 && (
+        <div className="card card-pad" style={{textAlign:"center",padding:"48px 24px"}}>
+          <div style={{fontSize:28,marginBottom:8}}>All caught up!</div>
+          <div className="text-sm">No new leads waiting. Import a quote or add a lead to get started.</div>
+        </div>
+      )}
+
+      {unassigned.length > 0 && (
+        <div className="mb-24">
+          <div className="flex-between mb-12">
+            <div className="heading-sm" style={{color:"var(--new)"}}>Unassigned ({unassigned.length})</div>
+            <div className="text-xs">Click a name to assign</div>
+          </div>
+          {unassigned.map(l=><LeadRow key={l.id} lead={l}/>)}
+        </div>
+      )}
+
+      {assigned.length > 0 && (
+        <div>
+          <div className="heading-sm mb-12" style={{color:"var(--text-mid)"}}>Assigned but still New Lead ({assigned.length})</div>
+          {assigned.map(l=><LeadRow key={l.id} lead={l}/>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Import Quote Field Maps ──
 const PRODUCT_MAP = {"Retractable Awning":"Retractable Awnings","Retractable":"Retractable Awnings","Shed Door Awning":"Shed Door Awnings","Shed Door":"Shed Door Awnings","Barrel Door Awning":"Barrel Door Awnings","Barrel Door":"Barrel Door Awnings","Deck Awning Seasonal":"Deck Awnings (Seasonal)","Deck Awning All":"Deck Awnings (All Season)","A-Frame":"A-Frame / Hip Awnings","Hip Awning":"A-Frame / Hip Awnings","Truss":"Truss Rafters","Truss Rafter":"Truss Rafters","Vinyl Roll":"Vinyl Roll Curtains","Soltis":"Soltis Roll Curtains","Stairway":"Stairway Canopies","Stairway Canopy":"Stairway Canopies","Walkway":"Walkway Canopies","Walkway Canopy":"Walkway Canopies","Storefront":"Storefront Sheds","Vestibule":"Vestibules","Recover":"Recovers","Pergola":"Pergolas","Sunroom":"3-Season Sunrooms","3 Season":"3-Season Sunrooms","3-Season":"3-Season Sunrooms","Hurricane":"Hurricane Shutters","Hurricane Shutter":"Hurricane Shutters","Motorized Screen":"Motorized Screens","Hard Roof":"Hard Roofs"};
 const SOURCE_MAP = {"Referral":"Referral","Referred":"Referral","Phone":"Phone/Inbound","Called":"Phone/Inbound","Inbound":"Phone/Inbound","Walk-in":"Phone/Inbound","Walk In":"Phone/Inbound","Repeat":"Repeat Customer","Return":"Repeat Customer","Previous":"Repeat Customer"};
@@ -1214,18 +1283,18 @@ function App() {
 
   useEffect(()=>{save(leads)},[leads]);
 
-  // Auto-detect import data from Export script (stored in localStorage by launcher)
+  // Auto-detect import data from Export script (loaded via crm-import-data.js)
   useEffect(()=>{
     try {
-      const raw = localStorage.getItem('lfpease-crm-import');
-      if(raw) {
-        const pkg = JSON.parse(raw);
-        // Only use if less than 5 minutes old
-        if(pkg.data && pkg.ts && (Date.now() - pkg.ts) < 300000) {
+      const pkg = window.__CRM_IMPORT_DATA;
+      if(pkg && pkg.data && pkg.ts) {
+        // Only use if less than 5 minutes old and not already imported
+        const lastTs = Number(localStorage.getItem('lfpease-last-import-ts')) || 0;
+        if(pkg.ts > lastTs && (Date.now() - pkg.ts) < 300000) {
           setImportData(pkg.data);
           setShowImport(true);
         }
-        localStorage.removeItem('lfpease-crm-import');
+        window.__CRM_IMPORT_DATA = null;
       }
     } catch(e) {}
   },[]);
@@ -1236,7 +1305,7 @@ function App() {
   const stats=useStats(leads);
 
   const update=useCallback((id,u)=>{setLeads(p=>p.map(l=>{if(l.id!==id)return l;const r={...l,...u,updatedAt:now()};if(u.stage==="Won"||u.stage==="Lost")r.closedAt=now();return r}))},[]);
-  const add=useCallback(l=>{setLeads(p=>[...p,{...l,id:uid(),createdAt:now(),updatedAt:now()}]);setShowAdd(false);setShowImport(false);setImportData(null)},[]);
+  const add=useCallback(l=>{setLeads(p=>[...p,{...l,id:uid(),createdAt:now(),updatedAt:now()}]);setShowAdd(false);setShowImport(false);setImportData(null);try{localStorage.setItem('lfpease-last-import-ts',String(Date.now()))}catch(e){}},[]);
   const del=useCallback(id=>{setLeads(p=>p.filter(l=>l.id!==id));setSelected(null)},[]);
   const log=useCallback((id,entry)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,activity:[...(l.activity||[]),entry],updatedAt:now()}))},[]);
   const addFile=useCallback((id,file)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:[...(l.files||[]),file]}))},[]);
@@ -1247,7 +1316,8 @@ function App() {
     if(search&&!l.name.toLowerCase().includes(search.toLowerCase())&&!l.contact.toLowerCase().includes(search.toLowerCase()))return false;return true;
   }),[leads,fRep,fProd,fStage,search]);
 
-  const NAV=[["playbook","📋 Playbook"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["reps","Reps"]];
+  const newLeadN=useMemo(()=>leads.filter(l=>l.stage==="New Lead").length,[leads]);
+  const NAV=[["playbook","📋 Playbook"],["newleads","New Leads"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["reps","Reps"]];
 
   return (
     <div style={{minHeight:"100vh"}}>
@@ -1259,6 +1329,7 @@ function App() {
             {k==="cold"&&coldN>0&&<span className="nav-badge" style={{background:"var(--cold)"}}>{coldN}</span>}
             {k==="revival"&&revN>0&&<span className="nav-badge" style={{background:"var(--accent)",color:"var(--primary)"}}>{revN}</span>}
             {k==="playbook"&&actionN>0&&<span className="nav-badge" style={{background:"var(--quote)"}}>{actionN}</span>}
+            {k==="newleads"&&newLeadN>0&&<span className="nav-badge" style={{background:"var(--new)"}}>{newLeadN}</span>}
           </button>
         ))}</nav>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -1269,6 +1340,7 @@ function App() {
 
       <main className="main">
         {view==="playbook"&&<PlaybookView leads={leads} setSelected={setSelected} logActivity={log}/>}
+        {view==="newleads"&&<NewLeadsView leads={leads} update={update} setSelected={setSelected} logActivity={log}/>}
         {view==="dashboard"&&<DashView stats={stats} leads={leads} setView={setView} setSelected={setSelected} coldN={coldN} actionN={actionN}/>}
         {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep}/>}
         {view==="map"&&<MapView leads={leads} setSelected={setSelected} fStage={mapStage} setFStage={setMapStage}/>}
