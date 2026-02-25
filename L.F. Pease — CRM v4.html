@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>L.F. Pease — CRM v4</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <style>
+    :root {
+      --primary:#1B4332; --primary-lt:#2D6A4F; --accent:#D4A017; --accent-lt:#E8C547;
+      --bg:#FAFAF5; --card:#fff; --border:#E8E5DC; --border-dk:#D4D0C4;
+      --text:#1A1A1A; --text-mid:#555; --text-lt:#888;
+      --won:#2D6A4F; --lost:#9B2C2C; --new:#2563EB; --contacted:#7C3AED;
+      --quote:#D97706; --negotiating:#0891B2; --cold:#DC2626;
+      --font:'DM Sans','Segoe UI',sans-serif; --font-display:'Playfair Display',serif;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font);background:var(--bg);color:var(--text)}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:#f0ede4}::-webkit-scrollbar-thumb{background:#c4bfa8;border-radius:3px}
+
+    /* ── Layout ── */
+    .header{background:var(--primary);padding:0 20px;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:50}
+    .logo{display:flex;align-items:center;gap:14}
+    .logo-icon{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:var(--primary)}
+    .logo-text{font-family:var(--font-display);font-size:17px;font-weight:600;color:#fff;letter-spacing:.02em}
+    .logo-sub{font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.15em;text-transform:uppercase}
+    .nav{display:flex;gap:2px}
+    .nav-btn{padding:8px 10px;border-radius:6px;border:none;cursor:pointer;font-size:11px;font-weight:500;background:transparent;color:rgba(255,255,255,.6);transition:all .2s;position:relative;font-family:var(--font)}
+    .nav-btn.active{background:rgba(255,255,255,.15);color:#fff}
+    .nav-badge{position:absolute;top:1px;right:-2px;width:14px;height:14px;border-radius:99px;color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center}
+    .main{max-width:1400px;margin:0 auto;padding:24px}
+    .btn-add{padding:8px 18px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:var(--accent);color:var(--primary);font-family:var(--font)}
+
+    /* ── Cards & Containers ── */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px}
+    .card-pad{padding:24px}
+    .card-pad-sm{padding:16px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .grid-6{display:grid;grid-template-columns:repeat(6,1fr);gap:14px}
+    .flex-col{display:flex;flex-direction:column}
+    .flex-between{display:flex;justify-content:space-between;align-items:center}
+    .gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}.gap-4{gap:4px}
+    .mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}.mb-20{margin-bottom:20px}.mb-24{margin-bottom:24px}.mt-16{margin-top:16px}.mt-24{margin-top:24px}
+
+    /* ── Typography ── */
+    .heading{font-family:var(--font-display);font-size:22px;font-weight:600}
+    .heading-lg{font-family:var(--font-display);font-size:24px;font-weight:600}
+    .heading-sm{font-size:14px;font-weight:600}
+    .label{font-size:11px;font-weight:500;color:var(--text-lt);text-transform:uppercase;letter-spacing:.1em}
+    .big-num{font-size:32px;font-weight:700;font-family:var(--font-display)}
+    .med-num{font-size:20px;font-weight:700;font-family:var(--font-display)}
+    .text-sm{font-size:12px;color:var(--text-mid)}.text-xs{font-size:11px;color:var(--text-lt)}
+    .text-primary{color:var(--primary)}.text-won{color:var(--won)}.text-lost{color:var(--lost)}
+    .text-cold{color:var(--cold)}.text-accent{color:var(--accent)}.text-new{color:var(--new)}
+    .fw-600{font-weight:600}.fw-700{font-weight:700}
+
+    /* ── Badges ── */
+    .badge{font-size:10px;font-weight:600;padding:3px 10px;border-radius:99px;letter-spacing:.05em;display:inline-block}
+
+    /* ── Buttons ── */
+    .btn-sm{padding:4px 8px;border-radius:4px;border:1px solid var(--border);background:none;font-size:11px;cursor:pointer;color:var(--primary-lt);font-weight:500;font-family:var(--font)}
+    .btn-action{padding:5px 12px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font)}
+    .btn-primary{padding:10px 0;border-radius:8px;border:none;background:var(--primary);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)}
+    .btn-outline{padding:10px 20px;border-radius:8px;border:1px solid var(--border);background:var(--card);font-size:13px;cursor:pointer;font-family:var(--font)}
+
+    /* ── Table ── */
+    .table{width:100%;border-collapse:collapse}
+    .table th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-lt);padding:12px 14px;text-align:left;cursor:pointer;user-select:none;border-bottom:2px solid var(--border)}
+    .table td{padding:12px 14px;font-size:13px;border-bottom:1px solid var(--border)}
+    .table tr{cursor:pointer;transition:background .1s}
+    .table tbody tr:hover{background:var(--bg)}
+
+    /* ── Inputs ── */
+    .input{padding:8px 10px;border-radius:6px;border:1px solid var(--border);font-size:13px;font-family:var(--font);width:100%;background:var(--card)}
+    .select{padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;background:var(--card);font-family:var(--font)}
+
+    /* ── Animations ── */
+    .cold-pulse{animation:coldPulse 2s ease-in-out infinite}
+    @keyframes coldPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.2)}50%{box-shadow:0 0 0 8px rgba(220,38,38,0)}}
+    .revival-glow{animation:revGlow 3s ease-in-out infinite}
+    @keyframes revGlow{0%,100%{box-shadow:0 0 0 0 rgba(212,160,23,.2)}50%{box-shadow:0 0 0 8px rgba(212,160,23,0)}}
+    .timeline-dot::before{content:'';position:absolute;left:7px;top:24px;bottom:-8px;width:1px;background:var(--border)}
+    .timeline-dot:last-child::before{display:none}
+    .hover-lift:hover{transform:translateX(4px)}.hover-scale:hover{transform:scale(1.02)}
+    .leaflet-popup-content-wrapper{border-radius:10px!important}.leaflet-popup-content{margin:12px 16px!important;font-family:var(--font)!important}
+    .dropzone{border:2px dashed var(--border-dk);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg)}
+    .dropzone:hover,.dropzone.active{border-color:var(--accent);background:rgba(212,160,23,.04)}
+    .file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+    .file-thumb{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:pointer;transition:all .15s;aspect-ratio:1;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .file-thumb:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    .file-thumb img{width:100%;height:100%;object-fit:cover}
+    .file-del{position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:99px;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+    .file-thumb:hover .file-del{opacity:1}
+    .file-name{font-size:10px;color:var(--text-mid);padding:4px 6px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+    .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:200;cursor:pointer}
+    .lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.4)}
+
+    /* ── Stat Card via CSS ── */
+    .stat{border-top-width:3px;border-top-style:solid;transition:all .2s}
+    .stat .stat-label{margin-bottom:8px}.stat .stat-value{margin-top:0}.stat .stat-sub{margin-top:4px}
+
+    /* ── Alert boxes ── */
+    .alert{border-radius:12px;padding:16px;display:flex;gap:12px;align-items:center}
+    .alert-icon{font-size:20px;flex-shrink:0}
+
+    /* ── Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;justify-content:center;align-items:center;z-index:100;padding:24px}
+    .modal{background:var(--card);border-radius:16px;width:100%;max-height:90vh;overflow-y:auto;padding:32px;box-shadow:0 24px 64px rgba(0,0,0,.2)}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useMemo,useRef} = React;
+
+// ── Recharts safe imports ──
+const RC = window.Recharts || {};
+const [RLineChart,RLine,RBarChart,RBar,RXAxis,RYAxis,RTooltip,RResponsive,RPieChart,RPie,RCell,RCartGrid,RLegend,RAreaChart,RArea] =
+  ["LineChart","Line","BarChart","Bar","XAxis","YAxis","Tooltip","ResponsiveContainer","PieChart","Pie","Cell","CartesianGrid","Legend","AreaChart","Area"]
+  .map(n => RC[n] || (() => null));
+
+// ═══════════════════════
+// ── CONSTANTS & CONFIG ──
+// ═══════════════════════
+
+const STAGES = ["New Lead","Contacted","Quote Sent","Negotiating","Won","Lost"];
+const ACTIVE_STAGES = STAGES.slice(0,4);
+const PRODUCTS = ["Shed Door Awnings","Barrel Door Awnings","Deck Awnings (Seasonal)","Deck Awnings (All Season)","A-Frame / Hip Awnings","Retractable Awnings","Truss Rafters","Vinyl Roll Curtains","Soltis Roll Curtains","Stairway Canopies","Walkway Canopies","Storefront Sheds","Vestibules","Recovers","Pergolas","3-Season Sunrooms","Hurricane Shutters","Motorized Screens","Hard Roofs","Other"];
+const SOURCES = ["Referral","Phone/Inbound","Repeat Customer","Other"];
+const REPS = ["Unassigned","Larry","John","Nick"];
+const COLD_DAYS = 14;
+const LOSS_REASONS = ["Price/Budget","Went with Competitor","Timing/Not Ready","Ghosted/No Response","Changed Mind","Other"];
+
+const STAGE_COLORS = {"New Lead":"var(--new)","Contacted":"var(--contacted)","Quote Sent":"var(--quote)","Negotiating":"var(--negotiating)","Won":"var(--won)","Lost":"var(--lost)"};
+const STAGE_HEX = {"New Lead":"#2563EB","Contacted":"#7C3AED","Quote Sent":"#D97706","Negotiating":"#0891B2","Won":"#2D6A4F","Lost":"#9B2C2C"};
+const PIE_COLORS = ["#1B4332","#D4A017","#2563EB","#9B2C2C","#7C3AED","#0891B2"];
+
+const GEO = {"warwick":[41.7001,-71.4162],"cranston":[41.7798,-71.4373],"east greenwich":[41.6604,-71.459],"barrington":[41.7409,-71.3085],"providence":[41.824,-71.4128],"north kingstown":[41.5501,-71.4634],"pawtucket":[41.8787,-71.3826],"bristol":[41.6771,-71.2662],"lincoln":[41.921,-71.4348],"east providence":[41.8137,-71.3701],"westerly":[41.3776,-71.8273]};
+function geoLead(l){if(l.lat&&l.lng)return[l.lat,l.lng];const a=(l.address||"").toLowerCase();for(const[c,p]of Object.entries(GEO))if(a.includes(c))return[p[0]+(Math.random()-.5)*.008,p[1]+(Math.random()-.5)*.008];return[41.75+(Math.random()-.5)*.15,-71.45+(Math.random()-.5)*.15]}
+
+// ── Templates ──
+const emailTpl = {
+  initial:(n,p)=>({subj:`Following up — ${p} project | L.F. Pease`,body:`Hi ${n},\n\nHope you're doing well. I wanted to follow up on our conversation about your ${p.toLowerCase()} project.\n\nWe'd love to help make it happen. Do you have a few minutes this week to reconnect?\n\nBest regards,\nL.F. Pease Awning & Sunroom Co.`}),
+  quote:(n,p)=>({subj:`Your ${p} estimate — L.F. Pease`,body:`Hi ${n},\n\nJust checking in on the estimate we put together for your ${p.toLowerCase()} project. Happy to answer any questions.\n\nBest,\nL.F. Pease Awning & Sunroom Co.`}),
+  revival:(n,p)=>({subj:`Still thinking about that ${p.toLowerCase()}? | L.F. Pease`,body:`Hi ${n},\n\nJust reaching out to see if you're still interested in your ${p.toLowerCase()} project. No pressure — we've got availability opening up soon.\n\nHope to hear from you,\nL.F. Pease Awning & Sunroom Co.`}),
+  winback:(n,p)=>({subj:`New options for your ${p.toLowerCase()} | L.F. Pease`,body:`Hi ${n},\n\nHope you're doing well! We've got some new options and availability for ${p.toLowerCase()} projects this season. If things have changed on your end, we'd love to reconnect.\n\nNo pressure at all.\n\nBest,\nL.F. Pease Awning & Sunroom Co.`}),
+};
+const textTpl = {
+  initial:(n,p)=>`Hi ${n}, this is L.F. Pease following up on your ${p.toLowerCase()} project. Got a few minutes to chat this week?`,
+  quote:(n,p)=>`Hey ${n}, just checking in on that ${p.toLowerCase()} estimate. Any questions? - L.F. Pease`,
+  revival:(n,p)=>`Hi ${n}, still thinking about that ${p.toLowerCase()}? We've got openings coming up. - L.F. Pease`,
+  winback:(n,p)=>`Hey ${n}! L.F. Pease here — new options for ${p.toLowerCase()} projects this season. Want to reconnect?`,
+};
+
+// ═══════════════════
+// ── SEED DATA ──
+// ═══════════════════
+
+const SEED = [
+  {id:1,name:"Johnson Residence",contact:"Mike Johnson",phone:"(401) 555-0142",email:"mjohnson@email.com",address:"45 Elm St, Warwick, RI",product:"3-Season Sunrooms",source:"Referral",rep:"Larry",stage:"Won",value:38500,referredBy:"The Martins",notes:"3-season sunroom, cathedral ceiling.",createdAt:"2025-11-08",updatedAt:"2025-12-15",closedAt:"2025-12-15",activity:[{type:"note",text:"Initial call — very interested",date:"2025-11-08",by:"Larry"},{type:"note",text:"Site visit completed",date:"2025-11-15",by:"Larry"},{type:"email",text:"Sent estimate — $38,500",date:"2025-11-22",by:"Larry"},{type:"call",text:"Accepted quote, signed contract",date:"2025-12-15",by:"Larry"}]},
+  {id:2,name:"O'Brien Patio",contact:"Karen O'Brien",phone:"(401) 555-0198",email:"kobrien@email.com",address:"12 Oak Ave, Cranston, RI",product:"Pergolas",source:"Referral",rep:"John",stage:"Won",value:14200,referredBy:"The Thompsons",notes:"Attached pergola with fan mount.",createdAt:"2025-11-22",updatedAt:"2026-01-03",closedAt:"2026-01-03",activity:[{type:"call",text:"Inbound — wants pergola like neighbor",date:"2025-11-22",by:"John"},{type:"note",text:"Site visit, took measurements",date:"2025-12-02",by:"John"},{type:"email",text:"Quote sent $14,200",date:"2025-12-10",by:"John"},{type:"call",text:"Closed deal",date:"2026-01-03",by:"John"}]},
+  {id:3,name:"DeLuca Deck Enclosure",contact:"Tony DeLuca",phone:"(401) 555-0267",email:"tdeluca@email.com",address:"88 Maple Dr, East Greenwich, RI",product:"Motorized Screens",source:"Phone/Inbound",rep:"Larry",stage:"Won",value:22800,notes:"Screen room over existing deck, 16x20.",createdAt:"2025-12-01",updatedAt:"2026-01-18",closedAt:"2026-01-18",activity:[{type:"call",text:"Saw our truck on his street",date:"2025-12-01",by:"Larry"},{type:"note",text:"Site visit, deck in great shape",date:"2025-12-08",by:"Larry"},{type:"email",text:"Sent estimate $22,800",date:"2025-12-15",by:"Larry"},{type:"call",text:"Signed, deposit received",date:"2026-01-18",by:"Larry"}]},
+  {id:4,name:"Patel Sunroom Addition",contact:"Raj Patel",phone:"(401) 555-0334",email:"rpatel@email.com",address:"201 Cedar Ln, Barrington, RI",product:"3-Season Sunrooms",source:"Referral",rep:"John",stage:"Negotiating",value:52000,referredBy:"Tony DeLuca",notes:"4-season sunroom, heated floors. Big job.",createdAt:"2026-01-10",updatedAt:"2026-02-20",activity:[{type:"call",text:"DeLuca referral, wants 4-season",date:"2026-01-10",by:"John"},{type:"note",text:"Site visit — heated floors, water view",date:"2026-01-18",by:"John"},{type:"email",text:"Detailed estimate $52,000",date:"2026-01-28",by:"John"},{type:"call",text:"Discussing financing",date:"2026-02-20",by:"John"}]},
+  {id:5,name:"McCarthy Awning",contact:"Sean McCarthy",phone:"(401) 555-0401",email:"smccarthy@email.com",address:"77 Pine St, Providence, RI",product:"Retractable Awnings",source:"Repeat Customer",rep:"Nick",stage:"Won",value:8900,notes:"Retractable awning, motorized.",createdAt:"2026-01-15",updatedAt:"2026-02-05",closedAt:"2026-02-05",activity:[{type:"call",text:"Did his neighbor years ago",date:"2026-01-15",by:"Nick"},{type:"note",text:"Quick measure",date:"2026-01-20",by:"Nick"},{type:"email",text:"Quote $8,900",date:"2026-01-22",by:"Nick"},{type:"call",text:"Accepted, scheduled",date:"2026-02-05",by:"Nick"}]},
+  {id:6,name:"Williams Screen Porch",contact:"Dave Williams",phone:"(401) 555-0478",email:"dwilliams@email.com",address:"33 Birch Rd, North Kingstown, RI",product:"Motorized Screens",source:"Phone/Inbound",rep:"Larry",stage:"Quote Sent",value:19500,notes:"Screen porch with knee walls.",createdAt:"2026-02-01",updatedAt:"2026-02-08",activity:[{type:"call",text:"Inbound about screen porch",date:"2026-02-01",by:"Larry"},{type:"note",text:"Site visit done",date:"2026-02-05",by:"Larry"},{type:"email",text:"Sent quote $19,500",date:"2026-02-08",by:"Larry"}]},
+  {id:7,name:"Costa Pergola",contact:"Maria Costa",phone:"(401) 555-0545",email:"mcosta@email.com",address:"156 Walnut St, Pawtucket, RI",product:"Pergolas",source:"Referral",rep:"John",stage:"Contacted",value:11000,referredBy:"Karen O'Brien",notes:"Freestanding pergola. O'Brien referral.",createdAt:"2026-02-10",updatedAt:"2026-02-12",activity:[{type:"call",text:"O'Brien referral, wants pergola",date:"2026-02-10",by:"John"},{type:"note",text:"Scheduled site visit",date:"2026-02-12",by:"John"}]},
+  {id:8,name:"Nguyen Retractable",contact:"Lisa Nguyen",phone:"(401) 555-0612",email:"lnguyen@email.com",address:"92 Cherry Hill, Warwick, RI",product:"Retractable Awnings",source:"Phone/Inbound",rep:"Nick",stage:"New Lead",value:6500,notes:"Retractable for back deck, needs summer shade.",createdAt:"2026-02-20",updatedAt:"2026-02-20",activity:[{type:"call",text:"Inbound — wants retractable",date:"2026-02-20",by:"Nick"}]},
+  {id:9,name:"Sullivan Addition",contact:"Tim Sullivan",phone:"(401) 555-0689",email:"tsullivan@email.com",address:"410 Bay View, Bristol, RI",product:"3-Season Sunrooms",source:"Referral",rep:"Larry",stage:"New Lead",value:45000,referredBy:"Mike Johnson",notes:"4-season room, water views. High-end.",createdAt:"2026-02-22",updatedAt:"2026-02-22",activity:[{type:"call",text:"Johnson referral — high end",date:"2026-02-22",by:"Larry"}]},
+  {id:10,name:"Romano Fixed Awning",contact:"Gina Romano",phone:"(401) 555-0756",email:"gromano@email.com",address:"18 Summit Ave, Cranston, RI",product:"Shed Door Awnings",source:"Repeat Customer",rep:"John",stage:"Lost",value:5200,lossReason:"Price/Budget",notes:"Went with cheaper option.",createdAt:"2025-12-10",updatedAt:"2026-01-08",closedAt:"2026-01-08",activity:[{type:"call",text:"Wants fixed awning",date:"2025-12-10",by:"John"},{type:"email",text:"Quote $5,200",date:"2025-12-18",by:"John"},{type:"call",text:"Went with competitor",date:"2026-01-08",by:"John"}]},
+  {id:11,name:"Brooks Enclosure",contact:"Alan Brooks",phone:"(401) 555-0823",email:"abrooks@email.com",address:"67 River Rd, Lincoln, RI",product:"Motorized Screens",source:"Referral",rep:"Nick",stage:"Won",value:26400,referredBy:"Brother-in-law",notes:"EZE Breeze full enclosure.",createdAt:"2025-11-15",updatedAt:"2026-01-25",closedAt:"2026-01-25",activity:[{type:"call",text:"Brother-in-law referral",date:"2025-11-15",by:"Nick"},{type:"note",text:"Measured for enclosure",date:"2025-11-25",by:"Nick"},{type:"email",text:"Estimate $26,400",date:"2025-12-05",by:"Nick"},{type:"call",text:"Signed, spring install",date:"2026-01-25",by:"Nick"}]},
+  {id:12,name:"Kim Sunroom Repair",contact:"James Kim",phone:"(401) 555-0890",email:"jkim@email.com",address:"305 Main St, East Providence, RI",product:"3-Season Sunrooms",source:"Phone/Inbound",rep:"Larry",stage:"Lost",value:12000,lossReason:"Timing/Not Ready",notes:"Decided to wait until next year.",createdAt:"2026-01-05",updatedAt:"2026-02-01",closedAt:"2026-02-01",activity:[{type:"call",text:"Needs panels replaced",date:"2026-01-05",by:"Larry"},{type:"note",text:"Inspected — 6 panels",date:"2026-01-12",by:"Larry"},{type:"email",text:"Quote $12,000",date:"2026-01-20",by:"Larry"},{type:"call",text:"Waiting until next year",date:"2026-02-01",by:"Larry"}]},
+  {id:13,name:"Ferreira Canopy",contact:"Carlos Ferreira",phone:"(401) 555-0967",email:"cferreira@email.com",address:"230 Hope St, Providence, RI",product:"Pergolas",source:"Referral",rep:"John",stage:"Quote Sent",value:16800,referredBy:"Friend of a friend",notes:"Louvered pergola, motorized, over outdoor kitchen.",createdAt:"2026-02-05",updatedAt:"2026-02-09",activity:[{type:"call",text:"Referral — louvered pergola",date:"2026-02-05",by:"John"},{type:"note",text:"Complex but doable",date:"2026-02-07",by:"John"},{type:"email",text:"Estimate $16,800",date:"2026-02-09",by:"John"}]},
+  {id:14,name:"Tanner Awning Install",contact:"Beth Tanner",phone:"(401) 555-1034",email:"btanner@email.com",address:"51 School St, Westerly, RI",product:"Deck Awnings (All Season)",source:"Phone/Inbound",rep:"Nick",stage:"Contacted",value:7200,notes:"Restaurant patio awning. Commercial.",createdAt:"2026-02-14",updatedAt:"2026-02-15",activity:[{type:"call",text:"Restaurant owner, patio awning",date:"2026-02-14",by:"Nick"},{type:"note",text:"Scheduled site visit",date:"2026-02-15",by:"Nick"}]},
+];
+
+// ═══════════════════════
+// ── HELPERS ──
+// ═══════════════════════
+
+const SK = "lfpease-crm-v4b";
+const load = () => { try { return JSON.parse(localStorage.getItem(SK)) } catch { return null } };
+const save = d => { try { localStorage.setItem(SK, JSON.stringify(d)) } catch {} };
+const fmt = n => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
+const now = () => new Date().toISOString().split("T")[0];
+const uid = () => Date.now() + Math.random();
+const daysAgo = ds => { if(!ds) return 999; return Math.floor((new Date()-new Date(ds))/(864e5)) };
+const isCold = l => !["Won","Lost"].includes(l.stage) && daysAgo(l.updatedAt) >= COLD_DAYS;
+const isRevival = l => l.stage==="Lost" && l.closedAt && daysAgo(l.closedAt)>=60 && !l.revivalDismissed;
+const tplKey = l => l.stage==="Lost"?"winback":l.stage==="Quote Sent"?"quote":l.stage==="New Lead"?"initial":"revival";
+
+// ═══════════════════════════
+// ── SHARED UI COMPONENTS ──
+// ═══════════════════════════
+
+function Badge({stage}) {
+  const c = STAGE_HEX[stage]||"#888";
+  return <span className="badge" style={{background:`${c}18`,color:c,border:`1px solid ${c}35`}}>{stage}</span>;
+}
+function ColdTag({days}) {
+  return <span className="badge" style={{background:"rgba(220,38,38,.1)",color:"var(--cold)",border:"1px solid rgba(220,38,38,.25)"}}>🥶 {days}d cold</span>;
+}
+function LossTag({reason}) {
+  const colors={"Price/Budget":"#D97706","Went with Competitor":"#9B2C2C","Timing/Not Ready":"#2563EB","Ghosted/No Response":"#6B7280","Changed Mind":"#7C3AED"};
+  const c=colors[reason]||"#555";
+  return <span className="badge" style={{background:`${c}15`,color:c,border:`1px solid ${c}30`}}>{reason||"No reason"}</span>;
+}
+
+function Stat({label,value,sub,color,onClick}) {
+  return (
+    <div className="card stat" onClick={onClick} style={{padding:"28px 24px",borderTopColor:color||"transparent",cursor:onClick?"pointer":"default"}}>
+      <div className="label stat-label">{label}</div>
+      <div className="big-num stat-value" style={{color:color||"var(--text)"}}>{value}</div>
+      {sub && <div className="text-xs stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function Outreach({lead,tpl,onLog}) {
+  const fn = (lead.contact||"").split(" ")[0];
+  const et = (emailTpl[tpl]||emailTpl.revival)(fn,lead.product);
+  const tt = (textTpl[tpl]||textTpl.revival)(fn,lead.product);
+  const log = (type,msg) => onLog && onLog(lead.id,{type,text:msg,date:now(),by:lead.rep});
+  const doEmail = e => { e.stopPropagation(); window.open(`mailto:${lead.email}?subject=${encodeURIComponent(et.subj)}&body=${encodeURIComponent(et.body)}`); log("email",`Email sent (${tpl})`) };
+  const doText = e => { e.stopPropagation(); window.open(`sms:${lead.phone.replace(/[^0-9+]/g,"")}?body=${encodeURIComponent(tt)}`); log("text",`Text sent (${tpl})`) };
+  const doCall = e => { e.stopPropagation(); window.open(`tel:${lead.phone.replace(/[^0-9+]/g,"")}`) };
+  return <div style={{display:"flex",gap:4}}><button className="btn-sm" onClick={doEmail}>✉️ Email</button><button className="btn-sm" onClick={doText}>💬 Text</button><button className="btn-sm" onClick={doCall}>📞 Call</button></div>;
+}
+
+function Timeline({items}) {
+  if(!items?.length) return <div className="text-sm" style={{padding:"12px 0"}}>No activity yet.</div>;
+  const icons = {call:"📞",email:"✉️",text:"💬",note:"📝"};
+  return <div className="flex-col">{[...items].sort((a,b)=>b.date.localeCompare(a.date)).map((a,i)=>(
+    <div key={i} className="timeline-dot" style={{display:"flex",gap:12,padding:"8px 0",position:"relative"}}>
+      <div style={{width:16,height:16,borderRadius:99,background:"var(--bg)",border:"2px solid var(--accent)",flexShrink:0,marginTop:2,zIndex:1}}/>
+      <div style={{flex:1}}>
+        <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:2}}>
+          <span style={{fontSize:12}}>{icons[a.type]||"📝"}</span>
+          <span className="text-xs fw-600" style={{color:"var(--text)"}}>{a.by}</span>
+          <span className="text-xs">{a.date}</span>
+        </div>
+        <div className="text-sm" style={{lineHeight:1.4}}>{a.text}</div>
+      </div>
+    </div>
+  ))}</div>;
+}
+
+function ChartCard({title,children,height=200}) {
+  return <div className="card card-pad"><div className="heading-sm mb-16">{title}</div><RResponsive width="100%" height={height}>{children}</RResponsive></div>;
+}
+
+// ── File Manager for Lead Documents ──
+function FileManager({files,onAdd,onDelete}) {
+  const [dragging,setDragging]=useState(false);
+  const [lightbox,setLightbox]=useState(null);
+  const inputRef=useRef(null);
+
+  const handleFiles = (fileList) => {
+    Array.from(fileList).forEach(file => {
+      if(file.size > 3*1024*1024) { alert(`${file.name} is too large (max 3MB per file)`); return; }
+      const allowed = ['image/jpeg','image/png','image/webp','image/gif','application/pdf'];
+      if(!allowed.includes(file.type)) { alert(`${file.name}: unsupported type. Use images or PDF.`); return; }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        onAdd({
+          id: uid(),
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: e.target.result,
+          date: now()
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const onDrop = (e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); };
+  const onDragOver = (e) => { e.preventDefault(); setDragging(true); };
+  const onDragLeave = () => setDragging(false);
+  const onPick = (e) => handleFiles(e.target.files);
+
+  const isImage = (type) => type?.startsWith('image/');
+  const fmtSize = (bytes) => bytes < 1024 ? bytes+'B' : bytes < 1048576 ? (bytes/1024).toFixed(1)+'KB' : (bytes/1048576).toFixed(1)+'MB';
+  const totalSize = (files||[]).reduce((s,f) => s + (f.size||0), 0);
+
+  const openFile = (f) => {
+    if(isImage(f.type)) { setLightbox(f); }
+    else {
+      // PDF: open in new tab
+      const w = window.open();
+      w.document.write(`<iframe src="${f.data}" style="width:100%;height:100%;border:none;position:fixed;inset:0"></iframe>`);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex-between mb-12">
+        <div className="heading-sm">Files & Documents</div>
+        <div className="text-xs">{(files||[]).length} file{(files||[]).length!==1?"s":""}{totalSize>0&&` · ${fmtSize(totalSize)}`}</div>
+      </div>
+
+      {/* Thumbnails */}
+      {files?.length > 0 && (
+        <div className="file-grid mb-12">
+          {files.map(f => (
+            <div key={f.id} className="file-thumb" onClick={() => openFile(f)}>
+              {isImage(f.type) ? (
+                <img src={f.data} alt={f.name}/>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:12}}>
+                  <span style={{fontSize:28}}>📄</span>
+                  <span style={{fontSize:10,color:"var(--text-mid)",fontWeight:600}}>PDF</span>
+                </div>
+              )}
+              <button className="file-del" onClick={(e) => { e.stopPropagation(); onDelete(f.id); }} title="Remove">×</button>
+              <div className="file-name" title={f.name}>{f.name}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drop zone */}
+      <div className={`dropzone ${dragging?"active":""}`} onDrop={onDrop} onDragOver={onDragOver} onDragLeave={onDragLeave} onClick={() => inputRef.current?.click()}>
+        <input ref={inputRef} type="file" multiple accept="image/*,.pdf" style={{display:"none"}} onChange={onPick}/>
+        <div style={{fontSize:24,marginBottom:6}}>{dragging ? "📥" : "📎"}</div>
+        <div className="fw-600" style={{fontSize:13,color:"var(--text-mid)"}}>{dragging ? "Drop files here" : "Drop files or click to upload"}</div>
+        <div className="text-xs" style={{marginTop:4}}>Images & PDFs · Max 3MB each</div>
+      </div>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="lightbox" onClick={() => setLightbox(null)}>
+          <img src={lightbox.data} alt={lightbox.name} onClick={e => e.stopPropagation()}/>
+          <button onClick={() => setLightbox(null)} style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,.15)",border:"none",color:"#fff",fontSize:24,cursor:"pointer",width:40,height:40,borderRadius:99,display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+          <div style={{position:"absolute",bottom:20,color:"rgba(255,255,255,.7)",fontSize:13}}>{lightbox.name} · {fmtSize(lightbox.size)} · {lightbox.date}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════
+// ── STATS CALCULATOR ──
+// ═══════════════════════
+
+function useStats(leads) {
+  return useMemo(() => {
+    const won=leads.filter(l=>l.stage==="Won"), lost=leads.filter(l=>l.stage==="Lost"), closed=[...won,...lost];
+    const active=leads.filter(l=>!["Won","Lost"].includes(l.stage));
+    const totalRev=won.reduce((s,l)=>s+l.value,0), avgDeal=won.length?totalRev/won.length:0;
+    const closeRate=closed.length?(won.length/closed.length)*100:0, pipeVal=active.reduce((s,l)=>s+l.value,0);
+
+    const repStats={};
+    REPS.filter(r=>r!=="Unassigned").forEach(r=>{
+      const rl=leads.filter(l=>l.rep===r),rw=rl.filter(l=>l.stage==="Won"),rlo=rl.filter(l=>l.stage==="Lost"),rc=[...rw,...rlo];
+      repStats[r]={total:rl.length,won:rw.length,lost:rlo.length,active:rl.filter(l=>!["Won","Lost"].includes(l.stage)).length,revenue:rw.reduce((s,l)=>s+l.value,0),closeRate:rc.length?(rw.length/rc.length)*100:0,avgDeal:rw.length?rw.reduce((s,l)=>s+l.value,0)/rw.length:0,pipeline:rl.filter(l=>!["Won","Lost"].includes(l.stage)).reduce((s,l)=>s+l.value,0)};
+    });
+
+    const sourceStats={};
+    SOURCES.forEach(src=>{const sl=leads.filter(l=>l.source===src),sw=sl.filter(l=>l.stage==="Won"),sc=[...sw,...sl.filter(l=>l.stage==="Lost")];sourceStats[src]={total:sl.length,won:sw.length,revenue:sw.reduce((s,l)=>s+l.value,0),closeRate:sc.length?(sw.length/sc.length)*100:0}});
+
+    const productStats={};
+    PRODUCTS.forEach(p=>{const pl=leads.filter(l=>l.product===p),pw=pl.filter(l=>l.stage==="Won");productStats[p]={total:pl.length,won:pw.length,revenue:pw.reduce((s,l)=>s+l.value,0),avgDeal:pw.length?pw.reduce((s,l)=>s+l.value,0)/pw.length:0}});
+
+    const stageCounts={};STAGES.forEach(s=>{stageCounts[s]=leads.filter(l=>l.stage===s).length});
+
+    const months=[];
+    for(let i=3;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const label=d.toLocaleString("default",{month:"short",year:"2-digit"});const mw=won.filter(l=>l.closedAt?.startsWith(key));months.push({label,revenue:mw.reduce((s,l)=>s+l.value,0)})}
+
+    return {totalRev,avgDeal,closeRate,pipeVal,won:won.length,lost:lost.length,active:active.length,total:leads.length,repStats,sourceStats,productStats,stageCounts,months};
+  }, [leads]);
+}
+
+// ══════════════════════════
+// ── VIEW: TODAY'S PLAYBOOK ──
+// ══════════════════════════
+
+function PlaybookView({leads,setSelected,logActivity}) {
+  const cold = leads.filter(isCold).sort((a,b)=>b.value-a.value);
+  const revival = leads.filter(isRevival).sort((a,b)=>b.value-a.value);
+  const fresh = leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).sort((a,b)=>b.value-a.value);
+  const quotes = leads.filter(l=>l.stage==="Quote Sent").sort((a,b)=>daysAgo(b.updatedAt)-daysAgo(a.updatedAt));
+  const nego = leads.filter(l=>l.stage==="Negotiating").sort((a,b)=>b.value-a.value);
+  const total = cold.length+revival.length+fresh.length+quotes.length+nego.length;
+  const dayStr = new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+
+  const Section = ({icon,title,sub,color,items,tpl:forceTpl}) => {
+    if(!items.length) return null;
+    return (
+      <div className="mb-24">
+        <div style={{display:"flex",gap:10,alignItems:"center"}} className="mb-12">
+          <span style={{fontSize:20}}>{icon}</span>
+          <div><div className="heading-sm" style={{color}}>{title} <span className="text-xs">({items.length})</span></div><div className="text-xs">{sub}</div></div>
+        </div>
+        <div className="flex-col gap-8">
+          {items.slice(0,5).map(l => (
+            <div key={l.id} onClick={()=>setSelected(l.id)} className="card hover-lift" style={{padding:"14px 18px",cursor:"pointer",borderLeft:`3px solid ${color}`,display:"flex",justifyContent:"space-between",alignItems:"center",transition:"all .15s"}}>
+              <div style={{flex:1}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}><span className="fw-600" style={{fontSize:14}}>{l.name}</span><Badge stage={l.stage}/></div>
+                <div className="text-xs">{l.contact} · {l.product} · {l.rep} · {daysAgo(l.updatedAt||l.closedAt)}d ago</div>
+              </div>
+              <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                <span className="med-num text-primary">{fmt(l.value)}</span>
+                <Outreach lead={l} tpl={forceTpl||tplKey(l)} onLog={logActivity}/>
+              </div>
+            </div>
+          ))}
+          {items.length>5 && <div className="text-xs" style={{paddingLeft:18}}>+ {items.length-5} more</div>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div className="mb-16"><div className="heading-lg">Today's Playbook</div><div className="text-sm" style={{marginTop:4}}>{dayStr}</div></div>
+
+      <div className="grid-4 mb-24">
+        {[["🔥 Cold Leads",cold.length,`${fmt(cold.reduce((s,l)=>s+l.value,0))} at risk`,"var(--cold)"],
+          ["🔄 Revival Ready",revival.length,`${fmt(revival.reduce((s,l)=>s+l.value,0))} recoverable`,"var(--accent)"],
+          ["🆕 Untouched",fresh.length,"Need first real contact","var(--new)"],
+          ["📋 Quotes Out",quotes.length,"Waiting on response","var(--quote)"]
+        ].map(([label,count,sub,color],i) => (
+          <div key={i} className="card" style={{padding:"16px 18px",borderLeft:`3px solid ${color}`}}>
+            <div className="label" style={{color}}>{label}</div>
+            <div className="big-num" style={{color,marginTop:4}}>{count}</div>
+            <div className="text-xs">{sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {total===0 ? (
+        <div className="card" style={{padding:48,textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>🎯</div><div className="fw-600 text-won" style={{fontSize:16}}>All caught up!</div><div className="text-sm" style={{marginTop:4}}>Every lead has been contacted.</div></div>
+      ) : (<div>
+        <Section icon="🥶" title="Re-engage Cold Leads" sub="Money is walking away" color="#DC2626" items={cold}/>
+        <Section icon="🆕" title="Make First Contact" sub="Fresh opportunities" color="#2563EB" items={fresh} tpl="initial"/>
+        <Section icon="📋" title="Follow Up on Quotes" sub="They have a number — close it" color="#D97706" items={quotes} tpl="quote"/>
+        <Section icon="🤝" title="Push Negotiations" sub="Almost there" color="#0891B2" items={nego} tpl="revival"/>
+        <Section icon="🔄" title="Win Back Lost Leads" sub="60+ days, time to reconnect" color="#D4A017" items={revival} tpl="winback"/>
+      </div>)}
+
+      <div className="card card-pad mt-24">
+        <div className="heading-sm mb-16">Action Items by Rep</div>
+        <div className="grid-3">
+          {REPS.filter(r=>r!=="Unassigned").map(rep => {
+            const rc=cold.filter(l=>l.rep===rep).length, rn=fresh.filter(l=>l.rep===rep).length, rq=quotes.filter(l=>l.rep===rep).length, rg=nego.filter(l=>l.rep===rep).length, rt=rc+rn+rq+rg;
+            return (
+              <div key={rep} style={{background:"var(--bg)",borderRadius:10,padding:16,border:"1px solid var(--border)"}}>
+                <div className="flex-between mb-12"><span className="fw-600" style={{fontSize:15}}>{rep}</span><span className="med-num" style={{color:rt>0?"var(--primary)":"var(--won)"}}>{rt>0?rt:"✓"}</span></div>
+                <div className="flex-col gap-4">
+                  {rc>0&&<div className="text-sm flex-between"><span style={{color:"var(--cold)"}}>🥶 Cold</span><span className="fw-600">{rc}</span></div>}
+                  {rn>0&&<div className="text-sm flex-between"><span style={{color:"var(--new)"}}>🆕 New</span><span className="fw-600">{rn}</span></div>}
+                  {rq>0&&<div className="text-sm flex-between"><span style={{color:"var(--quote)"}}>📋 Quotes</span><span className="fw-600">{rq}</span></div>}
+                  {rg>0&&<div className="text-sm flex-between"><span style={{color:"var(--negotiating)"}}>🤝 Negotiating</span><span className="fw-600">{rg}</span></div>}
+                  {rt===0&&<div className="text-sm text-won">All caught up!</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════
+// ── VIEW: REFERRAL TRACKER ──
+// ═══════════════════════════
+
+function ReferralView({leads,setSelected}) {
+  const refData = useMemo(() => {
+    const map = {};
+    leads.forEach(l => {
+      if(!l.referredBy) return;
+      const k = l.referredBy;
+      if(!map[k]) map[k] = {name:k,refs:[],totalVal:0,wonVal:0,wonN:0,activeN:0};
+      map[k].refs.push(l);
+      map[k].totalVal += l.value;
+      if(l.stage==="Won"){map[k].wonVal+=l.value;map[k].wonN++}
+      if(!["Won","Lost"].includes(l.stage)) map[k].activeN++;
+    });
+    return Object.values(map).sort((a,b)=>b.totalVal-a.totalVal);
+  },[leads]);
+
+  const refLeads = leads.filter(l=>l.source==="Referral");
+  const wonRefVal = refLeads.filter(l=>l.stage==="Won").reduce((s,l)=>s+l.value,0);
+  const refClosed = refLeads.filter(l=>["Won","Lost"].includes(l.stage));
+  const refRate = refClosed.length ? (refLeads.filter(l=>l.stage==="Won").length/refClosed.length)*100 : 0;
+
+  const srcChart = useMemo(()=>SOURCES.map(s=>{const sl=leads.filter(l=>l.source===s),sw=sl.filter(l=>l.stage==="Won"),sc=[...sw,...sl.filter(l=>l.stage==="Lost")];return{name:s.split("/")[0],revenue:sw.reduce((sm,l)=>sm+l.value,0),rate:sc.length?Math.round(sw.length/sc.length*100):0}}),[leads]);
+
+  return (
+    <div>
+      <div className="heading mb-20">Referral Tracker</div>
+
+      <div className="grid-4 mb-24">
+        <Stat label="Referral Leads" value={refLeads.length} sub={`${fmt(refLeads.reduce((s,l)=>s+l.value,0))} total value`} color="#1B4332"/>
+        <Stat label="Referral Revenue" value={fmt(wonRefVal)} sub="closed referral deals" color="#2D6A4F"/>
+        <Stat label="Referral Close Rate" value={`${refRate.toFixed(0)}%`} sub="vs other sources" color="#D4A017"/>
+        <Stat label="Top Referrer" value={refData[0]?fmt(refData[0].totalVal):"—"} sub={refData[0]?.name||"None yet"} color="#7C3AED"/>
+      </div>
+
+      <div className="grid-2 mb-24">
+        <ChartCard title="Revenue by Source"><RBarChart data={srcChart} barSize={36}><RCartGrid strokeDasharray="3 3" stroke="#eee"/><RXAxis dataKey="name" tick={{fontSize:12,fill:"#555"}}/><RYAxis tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/><RTooltip formatter={v=>typeof v==="number"&&v>100?fmt(v):v} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="revenue" fill="#1B4332" radius={[6,6,0,0]}/></RBarChart></ChartCard>
+        <ChartCard title="Close Rate by Source"><RBarChart data={srcChart} barSize={36}><RCartGrid strokeDasharray="3 3" stroke="#eee"/><RXAxis dataKey="name" tick={{fontSize:12,fill:"#555"}}/><RYAxis tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`${v}%`}/><RTooltip formatter={v=>`${v}%`} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="rate" fill="#D4A017" radius={[6,6,0,0]}/></RBarChart></ChartCard>
+      </div>
+
+      <div className="heading-sm mb-12">Your Referral Network</div>
+      {refData.length===0 ? (
+        <div className="card" style={{padding:32,textAlign:"center"}}><div className="text-sm">No referrals tracked yet. Add "Referred By" to leads to build your network.</div></div>
+      ) : (
+        <div className="flex-col gap-16">
+          {refData.map((r,i) => (
+            <div key={r.name} className="card hover-scale" style={{padding:20,borderLeft:`4px solid ${i===0?"var(--accent)":"var(--primary)"}`,transition:"all .15s"}}>
+              <div className="flex-between mb-16">
+                <div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}><span style={{fontSize:18}}>{["🏆","🥈","🥉","👤"][Math.min(i,3)]}</span><span className="fw-700" style={{fontSize:18}}>{r.name}</span></div>
+                  <div className="text-xs" style={{marginTop:4}}>{r.refs.length} referral{r.refs.length!==1?"s":""} · {r.wonN} won · {r.activeN} active</div>
+                </div>
+                <div style={{textAlign:"right"}}><div className="med-num text-primary" style={{fontSize:22}}>{fmt(r.totalVal)}</div><div className="text-xs text-won">total pipeline value</div></div>
+              </div>
+              <div className="flex-col gap-8">
+                {r.refs.map(lead => {
+                  const downstream = leads.filter(l=>l.referredBy===lead.contact);
+                  return (
+                    <div key={lead.id}>
+                      <div onClick={()=>setSelected(lead.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"var(--bg)",borderRadius:8,cursor:"pointer",border:"1px solid var(--border)",transition:"all .15s"}}>
+                        <div style={{width:8,height:8,borderRadius:99,background:STAGE_HEX[lead.stage],flexShrink:0}}/>
+                        <div style={{flex:1}}><span className="fw-600" style={{fontSize:13}}>{lead.name}</span><span className="text-xs" style={{marginLeft:8}}>{lead.product}</span></div>
+                        <Badge stage={lead.stage}/>
+                        <span className="fw-700 text-primary" style={{fontSize:14,marginLeft:8}}>{fmt(lead.value)}</span>
+                      </div>
+                      {downstream.map(ds => (
+                        <div key={ds.id} onClick={()=>setSelected(ds.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 14px 8px 40px",cursor:"pointer"}} className="hover-lift">
+                          <span className="text-accent" style={{fontSize:11}}>↳</span>
+                          <div style={{width:6,height:6,borderRadius:99,background:STAGE_HEX[ds.stage]}}/>
+                          <div style={{flex:1}}><span className="fw-600" style={{fontSize:12}}>{ds.name}</span><span className="text-xs" style={{marginLeft:8}}>{ds.product}</span></div>
+                          <Badge stage={ds.stage}/><span className="fw-600 text-primary" style={{fontSize:13,marginLeft:8}}>{fmt(ds.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+              {r.wonVal>0 && <div style={{marginTop:12,padding:"10px 14px",background:"rgba(45,106,79,.06)",borderRadius:8}} className="flex-between"><span className="text-sm text-won fw-600">Closed from this referrer</span><span className="med-num text-won">{fmt(r.wonVal)}</span></div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="alert mt-24" style={{background:"rgba(212,160,23,.06)",border:"1px solid rgba(212,160,23,.2)"}}>
+        <span className="alert-icon">💡</span>
+        <div><div className="fw-600 text-accent" style={{fontSize:13}}>Pro tip: Track every referral</div><div className="text-sm">Fill in "Referred By" when adding leads. Over time you'll see exactly who's your best salesperson.</div></div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════
+// ── VIEW: DASHBOARD ──
+// ═══════════════════
+
+function DashView({stats,leads,setView,setSelected,coldN,actionN}) {
+  const recent = [...leads].sort((a,b)=>b.updatedAt?.localeCompare(a.updatedAt)).slice(0,5);
+  const srcData = Object.entries(stats.sourceStats).map(([n,s])=>({name:n.split("/")[0],value:s.total})).filter(d=>d.value>0);
+  const prodData = Object.entries(stats.productStats).map(([n,s])=>({name:n.replace(/ \(.*\)/,"").replace(" Awnings",""),revenue:s.revenue,total:s.total})).filter(d=>d.revenue>0||d.total>0).sort((a,b)=>b.revenue-a.revenue);
+  const stageData = STAGES.map(s=>({name:s,count:stats.stageCounts[s],fill:STAGE_HEX[s]}));
+
+  return (
+    <div>
+      <div className="grid-6 mb-24">
+        <Stat label="Total Revenue" value={fmt(stats.totalRev)} sub={`${stats.won} deals`} color="#2D6A4F"/>
+        <Stat label="Pipeline" value={fmt(stats.pipeVal)} sub={`${stats.active} active`} color="#D4A017"/>
+        <Stat label="Close Rate" value={`${stats.closeRate.toFixed(1)}%`} sub={`${stats.won}W / ${stats.lost}L`} color="#2563EB"/>
+        <Stat label="Avg Deal" value={fmt(stats.avgDeal)} color="#7C3AED"/>
+        <Stat label="Today's Actions" value={actionN>0?actionN:"✓"} sub={actionN>0?"needs attention":"All good"} color={actionN>0?"#D97706":"#2D6A4F"} onClick={()=>setView("playbook")}/>
+        <Stat label="Gone Cold" value={coldN>0?coldN:"✓"} sub={coldN>0?`${COLD_DAYS}+ days`:"All warm"} color="#DC2626" onClick={()=>setView("cold")}/>
+      </div>
+      <div className="grid-2 mb-24">
+        <ChartCard title="Monthly Revenue" height={220}><RAreaChart data={stats.months}><defs><linearGradient id="rG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#1B4332" stopOpacity={.3}/><stop offset="95%" stopColor="#1B4332" stopOpacity={0}/></linearGradient></defs><RCartGrid strokeDasharray="3 3" stroke="#eee"/><RXAxis dataKey="label" tick={{fontSize:12,fill:"#888"}}/><RYAxis tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/><RTooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RArea type="monotone" dataKey="revenue" stroke="#1B4332" fill="url(#rG)" strokeWidth={2.5} dot={{r:4,fill:"#1B4332"}}/></RAreaChart></ChartCard>
+        <ChartCard title="Lead Sources" height={220}><RPieChart><RPie data={srcData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={40} paddingAngle={3} strokeWidth={0}>{srcData.map((_,i)=><RCell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</RPie><RTooltip contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RLegend iconType="circle" iconSize={8} wrapperStyle={{fontSize:11}}/></RPieChart></ChartCard>
+      </div>
+      <div className="grid-2">
+        <ChartCard title="Pipeline Stages"><RBarChart data={stageData} layout="vertical" barSize={22}><RXAxis type="number" tick={{fontSize:11,fill:"#888"}}/><RYAxis type="category" dataKey="name" tick={{fontSize:11,fill:"#555"}} width={80}/><RTooltip contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="count" radius={[0,6,6,0]}>{stageData.map((e,i)=><RCell key={i} fill={e.fill}/>)}</RBar></RBarChart></ChartCard>
+        <div className="card card-pad">
+          <div className="flex-between mb-16"><div className="heading-sm">Recent Activity</div><button onClick={()=>setView("leads")} className="btn-sm">View All →</button></div>
+          <div className="flex-col gap-8">{recent.map(l=>(
+            <div key={l.id} onClick={()=>setSelected(l.id)} className="flex-between" style={{padding:"10px 12px",borderRadius:8,border:`1px solid ${isCold(l)?"rgba(220,38,38,.2)":"var(--border)"}`,cursor:"pointer"}}>
+              <div><div className="fw-600" style={{fontSize:13}}>{l.name}{isCold(l)&&" 🥶"}</div><div className="text-xs">{l.product} · {l.rep}</div></div>
+              <div style={{textAlign:"right"}}><Badge stage={l.stage}/><div className="fw-600 text-mid" style={{fontSize:12,marginTop:4}}>{fmt(l.value)}</div></div>
+            </div>
+          ))}</div>
+        </div>
+      </div>
+      <ChartCard title="Product Performance" height={Math.max(180,prodData.length*32)}><RBarChart data={prodData} barSize={20} layout="vertical"><RCartGrid strokeDasharray="3 3" stroke="#eee"/><RXAxis type="number" tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/><RYAxis type="category" dataKey="name" tick={{fontSize:11,fill:"#555"}} width={110}/><RTooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="revenue" fill="#1B4332" radius={[0,6,6,0]}/></RBarChart></ChartCard>
+    </div>
+  );
+}
+
+// ═════════════════
+// ── VIEW: PIPELINE ──
+// ═════════════════
+
+function PipeView({leads,update,setSelected,filterRep,setFilterRep}) {
+  return (
+    <div>
+      <div className="flex-between mb-20"><div className="heading">Sales Pipeline</div><select className="select" value={filterRep} onChange={e=>setFilterRep(e.target.value)}><option value="All">All Reps</option>{REPS.filter(r=>r!=="Unassigned").map(r=><option key={r}>{r}</option>)}</select></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr) .8fr .8fr",gap:12,overflowX:"auto"}}>
+        {STAGES.map(stage => {
+          const sl=leads.filter(l=>l.stage===stage), sv=sl.reduce((s,l)=>s+l.value,0), closed=stage==="Won"||stage==="Lost";
+          return (
+            <div key={stage} style={{minWidth:180}}>
+              <div className="flex-between" style={{padding:"12px 14px",borderRadius:"10px 10px 0 0",background:`${STAGE_HEX[stage]}12`,borderBottom:`2px solid ${STAGE_HEX[stage]}`}}>
+                <div><span className="fw-600" style={{fontSize:12,color:STAGE_HEX[stage]}}>{stage}</span><span className="text-xs" style={{marginLeft:6}}>({sl.length})</span></div>
+                <span className="text-xs fw-600">{fmt(sv)}</span>
+              </div>
+              <div className="flex-col gap-8" style={{padding:"8px 0",minHeight:120}}>
+                {sl.map(l => (
+                  <div key={l.id} onClick={()=>setSelected(l.id)} className="card" style={{padding:"12px 14px",cursor:"pointer",borderLeft:`3px solid ${isCold(l)?"var(--cold)":STAGE_HEX[stage]}`}}>
+                    <div className="fw-600" style={{fontSize:13,marginBottom:4}}>{l.name}{isCold(l)&&" 🥶"}</div>
+                    <div className="text-xs" style={{marginBottom:6}}>{l.product}</div>
+                    <div className="flex-between"><span className="fw-700 text-primary" style={{fontSize:13}}>{fmt(l.value)}</span><span className="text-xs">{l.rep}</span></div>
+                    {!closed && <div style={{display:"flex",gap:4,marginTop:8}}>
+                      {stage!=="Negotiating"&&<button onClick={e=>{e.stopPropagation();update(l.id,{stage:STAGES[STAGES.indexOf(stage)+1]})}} className="btn-sm" style={{flex:1}}>Advance →</button>}
+                      <button onClick={e=>{e.stopPropagation();update(l.id,{stage:"Won"})}} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>Won</button>
+                      <button onClick={e=>{e.stopPropagation();update(l.id,{stage:"Lost"})}} className="btn-action" style={{background:"rgba(155,44,44,.08)",color:"var(--lost)"}}>Lost</button>
+                    </div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════
+// ── VIEW: MAP ──
+// ══════════════════
+
+function MapView({leads,setSelected,fStage,setFStage}) {
+  const mapRef=useRef(null), mapI=useRef(null), markers=useRef([]);
+  const sf=fStage||"All", filtered=sf==="All"?leads:leads.filter(l=>l.stage===sf);
+  const stageCounts=useMemo(()=>{const c={All:leads.length};STAGES.forEach(s=>{c[s]=leads.filter(l=>l.stage===s).length});return c},[leads]);
+  const cityStats=useMemo(()=>{const s={};leads.forEach(l=>{const a=(l.address||"").toLowerCase();let city="Other";for(const c of Object.keys(GEO))if(a.includes(c)){city=c.split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" ");break}if(!s[city])s[city]={n:0,won:0,act:0,rev:0};s[city].n++;if(l.stage==="Won"){s[city].won++;s[city].rev+=l.value}if(!["Won","Lost"].includes(l.stage))s[city].act++});return s},[leads]);
+
+  useEffect(()=>{if(!mapRef.current||mapI.current)return;const m=L.map(mapRef.current,{scrollWheelZoom:true}).setView([41.75,-71.45],10);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:'© OpenStreetMap'}).addTo(m);mapI.current=m;return()=>{m.remove();mapI.current=null}},[]);
+
+  useEffect(()=>{const m=mapI.current;if(!m)return;markers.current.forEach(mk=>m.removeLayer(mk));markers.current=[];
+    filtered.forEach(l=>{const[lat,lng]=geoLead(l);const sc=STAGE_HEX[l.stage]||"#888";const cold=isCold(l);
+      const icon=L.divIcon({className:'',html:`<div style="width:28px;height:28px;border-radius:50%;background:${cold?"#DC2626":sc};border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:white;font-weight:700;cursor:pointer">${l.name[0]}</div>`,iconSize:[28,28],iconAnchor:[14,14]});
+      const mk=L.marker([lat,lng],{icon}).addTo(m);
+      mk.bindPopup(`<div style="min-width:180px"><div style="font-weight:700;font-size:14px;margin-bottom:4px">${l.name}</div><div style="font-size:12px;color:#555;margin-bottom:6px">${l.contact} · ${l.product}</div><div style="font-size:16px;font-weight:700;color:#1B4332;margin-bottom:4px">${fmt(l.value)}</div><div style="font-size:11px;color:#888">${l.rep} · ${l.address}</div></div>`);
+      mk.on('dblclick',()=>setSelected(l.id));markers.current.push(mk)})
+  },[filtered]);
+
+  return (
+    <div>
+      <div className="flex-between mb-20">
+        <div className="heading">Customer Map <span className="text-xs">({filtered.length} pins)</span></div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{["All",...STAGES].map(s=><button key={s} onClick={()=>setFStage(s)} className="btn-sm" style={{background:sf===s?`${STAGE_HEX[s]||"#1B4332"}15`:"none",color:sf===s?(STAGE_HEX[s]||"#1B4332"):"#555",borderColor:sf===s?(STAGE_HEX[s]||"#1B4332"):"var(--border)",fontWeight:sf===s?600:400}}>{s} ({stageCounts[s]||0})</button>)}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 280px",gap:16}}>
+        <div className="card" style={{overflow:"hidden"}}><div ref={mapRef} style={{width:"100%",height:520}}/></div>
+        <div className="flex-col gap-12">
+          <div className="card card-pad-sm"><div className="heading-sm mb-12">Neighborhood Hotspots</div><div className="flex-col gap-8">{Object.entries(cityStats).sort((a,b)=>b[1].n-a[1].n).map(([city,s])=><div key={city} style={{padding:"10px 12px",background:"var(--bg)",borderRadius:8,border:"1px solid var(--border)"}}><div className="flex-between" style={{marginBottom:4}}><span className="fw-600" style={{fontSize:13}}>{city}</span><span className="text-xs">{s.n} lead{s.n!==1?"s":""}</span></div><div style={{display:"flex",gap:12}} className="text-xs"><span className="text-won">✓ {s.won} won</span><span className="text-new">{s.act} active</span></div>{s.rev>0&&<div className="text-xs fw-600" style={{color:"var(--primary-lt)",marginTop:2}}>{fmt(s.rev)} closed</div>}</div>)}</div></div>
+          <div className="card card-pad-sm"><div className="fw-600 mb-12" style={{fontSize:12}}>Legend</div><div className="text-xs mb-12" style={{color:"var(--text-mid)"}}>Click = details · Double-click = open</div><div className="flex-col gap-4">{[...STAGES,"Cold"].map(s=><div key={s} style={{display:"flex",gap:8,alignItems:"center"}}><div style={{width:12,height:12,borderRadius:99,background:s==="Cold"?"#DC2626":(STAGE_HEX[s]||"#888"),border:"2px solid white",boxShadow:"0 1px 3px rgba(0,0,0,.2)"}}/><span className="text-xs" style={{color:s==="Cold"?"var(--cold)":"var(--text-mid)"}}>{s==="Cold"?"Gone Cold":s}</span></div>)}</div></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════
+// ── VIEW: GONE COLD ──
+// ═══════════════════════
+
+function ColdView({leads,setSelected,logActivity}) {
+  const cl=leads.filter(isCold).sort((a,b)=>b.value-a.value), tv=cl.reduce((s,l)=>s+l.value,0);
+  if(!cl.length) return <div><div className="heading mb-20">Gone Cold</div><div className="card" style={{padding:48,textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>🔥</div><div className="fw-600 text-won" style={{fontSize:16}}>All caught up!</div></div></div>;
+  return (
+    <div>
+      <div className="flex-between mb-20"><div className="heading">Gone Cold <span className="text-xs text-cold">({cl.length})</span></div><div className="text-sm">At risk: <strong className="text-cold">{fmt(tv)}</strong></div></div>
+      <div className="alert mb-20" style={{background:"rgba(220,38,38,.04)",border:"1px solid rgba(220,38,38,.15)"}}><span className="alert-icon">⚠️</span><div><div className="fw-600 text-cold" style={{fontSize:13}}>No contact in {COLD_DAYS}+ days</div><div className="text-sm">Sorted by value. Hit them now.</div></div></div>
+      <div className="flex-col gap-12">{cl.map(l=>{const d=daysAgo(l.updatedAt);return(
+        <div key={l.id} onClick={()=>setSelected(l.id)} className="card cold-pulse" style={{padding:20,cursor:"pointer",borderLeft:"4px solid var(--cold)"}}>
+          <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><ColdTag days={d}/></div></div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><Badge stage={l.stage}/><span className="text-xs">{l.product} · {l.rep}</span></div>
+          <Outreach lead={l} tpl={tplKey(l)} onLog={logActivity}/>
+        </div>
+      )})}</div>
+    </div>
+  );
+}
+
+// ═══════════════════════
+// ── VIEW: REVIVAL ──
+// ═══════════════════════
+
+function RevivalView({leads,setSelected,update,logActivity}) {
+  const ll=leads.filter(l=>l.stage==="Lost").sort((a,b)=>daysAgo(b.closedAt)-daysAgo(a.closedAt));
+  const rr=ll.filter(isRevival), rv=rr.reduce((s,l)=>s+l.value,0);
+  const reasonData=useMemo(()=>{const s={};LOSS_REASONS.forEach(r=>{s[r]={n:0,v:0}});ll.forEach(l=>{const r=l.lossReason||"Other";if(!s[r])s[r]={n:0,v:0};s[r].n++;s[r].v+=l.value});return Object.entries(s).filter(([_,d])=>d.n>0).map(([name,d])=>({name:name.length>14?name.slice(0,14)+"…":name,count:d.n,value:d.v}))},[ll]);
+
+  const reopen=(e,l)=>{e.stopPropagation();update(l.id,{stage:"Contacted",closedAt:null,revivalDismissed:false});logActivity(l.id,{type:"note",text:"Re-opened for revival",date:now(),by:l.rep})};
+
+  return (
+    <div>
+      <div className="heading mb-20">Lost Lead Revival <span className="text-xs">({ll.length} lost)</span></div>
+      <div className="grid-4 mb-24">
+        <Stat label="Total Lost" value={ll.length} sub={`${fmt(ll.reduce((s,l)=>s+l.value,0))} walked away`} color="#9B2C2C"/>
+        <Stat label="Revival Ready" value={rr.length} sub={`${fmt(rv)} recoverable`} color="#D4A017"/>
+        <Stat label="60+ Days" value={ll.filter(l=>daysAgo(l.closedAt)>=60).length} sub="Time to reach out" color="#D97706"/>
+        <Stat label="90+ Days" value={ll.filter(l=>daysAgo(l.closedAt)>=90).length} sub="High priority" color="#DC2626"/>
+      </div>
+      <div className="grid-2 mb-24">
+        <ChartCard title="Why You're Losing"><RBarChart data={reasonData} layout="vertical" barSize={20}><RXAxis type="number" tick={{fontSize:11,fill:"#888"}}/><RYAxis type="category" dataKey="name" tick={{fontSize:11,fill:"#555"}} width={100}/><RTooltip contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="count" fill="#9B2C2C" radius={[0,6,6,0]}/></RBarChart></ChartCard>
+        <ChartCard title="Revenue Lost"><RBarChart data={reasonData} layout="vertical" barSize={20}><RXAxis type="number" tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/><RYAxis type="category" dataKey="name" tick={{fontSize:11,fill:"#555"}} width={100}/><RTooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="value" fill="#D4A017" radius={[0,6,6,0]}/></RBarChart></ChartCard>
+      </div>
+      {rr.length>0 && <div className="mb-24">
+        <div className="alert mb-16" style={{background:"rgba(212,160,23,.06)",border:"1px solid rgba(212,160,23,.2)"}}><span style={{fontSize:24}}>🔄</span><div><div className="fw-600 text-accent" style={{fontSize:14}}>Revival Opportunities — {fmt(rv)} Recoverable</div></div></div>
+        <div className="flex-col gap-12">{rr.sort((a,b)=>b.value-a.value).map(l=>{const d=daysAgo(l.closedAt);return(
+          <div key={l.id} onClick={()=>setSelected(l.id)} className={d>=90?"revival-glow":"card"} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,cursor:"pointer",borderLeft:`4px solid ${d>=90?"var(--cold)":"var(--accent)"}`}}>
+            <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><span className="text-xs fw-600" style={{color:d>=90?"var(--cold)":"var(--accent)"}}>{d} days since lost</span></div></div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><LossTag reason={l.lossReason}/><span className="text-xs">{l.product} · {l.rep}</span></div>
+            <div className="flex-between"><Outreach lead={l} tpl="winback" onLog={logActivity}/><div style={{display:"flex",gap:4}}><button onClick={e=>reopen(e,l)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>♻️ Re-open</button><button onClick={e=>{e.stopPropagation();update(l.id,{revivalDismissed:true})}} className="btn-sm">Dismiss</button></div></div>
+          </div>
+        )})}</div>
+      </div>}
+      <div className="heading-sm mb-12">All Lost Leads</div>
+      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr><th>Lead</th><th>Contact</th><th>Product</th><th>Value</th><th>Reason</th><th>Lost</th><th>Days</th></tr></thead><tbody>{ll.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isRevival(l)?"rgba(212,160,23,.04)":"transparent"}}><td className="fw-600">{l.name}{isRevival(l)&&" 🔄"}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="fw-600 text-primary">{fmt(l.value)}</td><td><LossTag reason={l.lossReason}/></td><td className="text-xs">{l.closedAt}</td><td className="fw-600" style={{color:daysAgo(l.closedAt)>=90?"var(--cold)":daysAgo(l.closedAt)>=60?"var(--accent)":"var(--text-lt)"}}>{daysAgo(l.closedAt)}d</td></tr>)}</tbody></table></div>
+    </div>
+  );
+}
+
+// ═══════════════════
+// ── VIEW: ALL LEADS ──
+// ═══════════════════
+
+function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFStage,search,setSearch}) {
+  const[sk,setSk]=useState("updatedAt");const[sd,setSd]=useState(-1);
+  const sorted=useMemo(()=>[...leads].sort((a,b)=>{if(sk==="value")return(a.value-b.value)*sd;return String(a[sk]||"").localeCompare(String(b[sk]||""))*sd}),[leads,sk,sd]);
+  const toggle=k=>{sk===k?setSd(d=>d*-1):(setSk(k),setSd(-1))};
+  return (
+    <div>
+      <div className="flex-between mb-20" style={{flexWrap:"wrap",gap:12}}>
+        <div className="heading">All Leads <span className="text-xs">({leads.length})</span></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <input className="input" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search..." style={{width:160}}/>
+          {[["Rep",fRep,setFRep,REPS.filter(r=>r!=="Unassigned")],["Product",fProd,setFProd,PRODUCTS],["Stage",fStage,setFStage,STAGES]].map(([l,v,s,o])=><select key={l} className="select" value={v} onChange={e=>s(e.target.value)}><option value="All">All {l}s</option>{o.map(x=><option key={x}>{x}</option>)}</select>)}
+        </div>
+      </div>
+      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr>{[["name","Lead"],["contact","Contact"],["product","Product"],["source","Source"],["rep","Rep"],["stage","Stage"],["value","Value"],["updatedAt","Updated"]].map(([k,l])=><th key={k} onClick={()=>toggle(k)}>{l} {sk===k?(sd>0?"↑":"↓"):""}</th>)}</tr></thead>
+      <tbody>{sorted.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isCold(l)?"rgba(220,38,38,.02)":"transparent"}}><td className="fw-600">{l.name}{isCold(l)&&" 🥶"}{l.files?.length>0&&<span title={`${l.files.length} file${l.files.length>1?"s":""}`} style={{marginLeft:4,fontSize:10}}>📎{l.files.length}</span>}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="text-sm">{l.source}</td><td className="text-sm">{l.rep}</td><td><Badge stage={l.stage}/></td><td className="fw-600 text-primary">{fmt(l.value)}</td><td className="text-xs">{l.updatedAt}</td></tr>)}</tbody></table></div>
+    </div>
+  );
+}
+
+// ═══════════════════
+// ── VIEW: REPS ──
+// ═══════════════════
+
+function RepsView({stats,setView,setFRep}) {
+  const rd=Object.entries(stats.repStats).map(([n,s])=>({name:n,...s}));
+  return (
+    <div>
+      <div className="heading mb-20">Sales Rep Performance</div>
+      <div className="grid-3 mb-24">{rd.map(r=>(
+        <div key={r.name} className="card card-pad" style={{borderTop:"3px solid var(--primary)"}}>
+          <div className="flex-between mb-16"><div style={{fontFamily:"var(--font-display)",fontSize:18}} className="fw-600">{r.name}</div><button onClick={()=>{setFRep(r.name);setView("leads")}} className="btn-sm">View Leads →</button></div>
+          <div className="grid-2 gap-12 mb-16">
+            <div style={{background:"var(--bg)",borderRadius:8,padding:12}}><div className="label">Revenue</div><div className="med-num text-primary">{fmt(r.revenue)}</div></div>
+            <div style={{background:"var(--bg)",borderRadius:8,padding:12}}><div className="label">Close Rate</div><div className="med-num" style={{color:r.closeRate>=70?"var(--won)":r.closeRate>=50?"var(--accent)":"var(--lost)"}}>{r.closeRate.toFixed(0)}%</div></div>
+          </div>
+          <div className="grid-4 gap-8">{[["Total",r.total,"--text-mid"],["Won",r.won,"--won"],["Lost",r.lost,"--lost"],["Active",r.active,"--new"]].map(([l,v,c])=><div key={l} style={{textAlign:"center"}}><div className="fw-700" style={{fontSize:18,color:`var(${c})`}}>{v}</div><div className="text-xs">{l}</div></div>)}</div>
+          <div style={{marginTop:16,paddingTop:12,borderTop:"1px solid var(--border)"}}><div className="flex-between text-sm"><span className="text-xs">Avg Deal:</span><span className="fw-600">{fmt(r.avgDeal)}</span></div><div className="flex-between text-sm" style={{marginTop:4}}><span className="text-xs">Pipeline:</span><span className="fw-600 text-accent">{fmt(r.pipeline)}</span></div></div>
+        </div>
+      ))}</div>
+      <ChartCard title="Revenue Comparison" height={250}><RBarChart data={rd} barSize={48}><RCartGrid strokeDasharray="3 3" stroke="#eee"/><RXAxis dataKey="name" tick={{fontSize:13,fill:"#555"}}/><RYAxis tick={{fontSize:11,fill:"#888"}} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/><RTooltip formatter={v=>fmt(v)} contentStyle={{borderRadius:8,border:"1px solid #E8E5DC",fontSize:13}}/><RBar dataKey="revenue" fill="#1B4332" radius={[6,6,0,0]} name="Closed"/><RBar dataKey="pipeline" fill="#D4A017" radius={[6,6,0,0]} name="Pipeline"/></RBarChart></ChartCard>
+    </div>
+  );
+}
+
+// ══════════════════════════════
+// ── VIEW: PRICE REFERENCE ──
+// ══════════════════════════════
+
+function PriceRefView() {
+  const [tab,setTab]=useState("residential");
+
+  const PriceTable=({title,rows,note})=>(
+    <div className="card mb-16" style={{overflow:"hidden"}}>
+      <div style={{padding:"14px 18px",background:"var(--bg)",borderBottom:"1px solid var(--border)"}}><span className="fw-600" style={{fontSize:14}}>{title}</span></div>
+      <table className="table" style={{cursor:"default"}}>
+        <thead><tr><th style={{cursor:"default"}}>Item / Size</th><th style={{cursor:"default",textAlign:"right"}}>Price</th></tr></thead>
+        <tbody>
+          {rows.map((r,i)=>(
+            <tr key={i} style={{cursor:"default",background:r.header?"var(--bg)":"transparent"}}>
+              <td style={{fontWeight:r.header?600:400,fontSize:r.header?12:13,color:r.header?"var(--text-lt)":"var(--text)",paddingLeft:r.indent?32:14}}>{r.label}</td>
+              <td style={{textAlign:"right",fontWeight:600,color:"var(--primary)",fontSize:13}}>{r.price||""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {note&&<div style={{padding:"10px 18px",background:"rgba(212,160,23,.04)",borderTop:"1px solid var(--border)"}}><span className="text-xs">⚠️ {note}</span></div>}
+    </div>
+  );
+
+  const residential = [
+    {title:"Shed Door Awnings",rows:[
+      {label:"3'–6\" Projection",price:"$1,375 each"},
+    ]},
+    {title:"Barrel Door Awnings",rows:[
+      {label:"3'–6\" Projection",price:"$1,595 each"},
+    ],note:"Not available on shingled houses"},
+    {title:"Deck Awnings (Seasonal)",rows:[
+      {label:"Under 150 sq'",price:"$31 / sq'"},
+      {label:"Over 150 sq'",price:"$26 / sq'"},
+    ]},
+    {title:"Deck Awnings (All Season / Up & Over)",rows:[
+      {label:"Under 150 sq'",price:"$33 / sq'"},
+      {label:"Over 150 sq'",price:"$29 / sq'"},
+    ]},
+    {title:"Truss Rafters",rows:[
+      {label:"Under 150 sq'",price:"$33 / sq'"},
+      {label:"Over 150 sq'",price:"$29 / sq'"},
+    ]},
+    {title:"A-Frame / Hip Awnings",rows:[
+      {label:"A-Frame or Hip",price:"$37 / sq'"},
+    ]},
+    {title:"Vinyl Roll Curtains",rows:[
+      {label:"Zippers or Tie",price:"$19 / sq'"},
+    ]},
+    {title:"Hardware & Accessories",rows:[
+      {label:"Footers for Stanchions",price:"$138 each"},
+      {label:"Wrap Double Stanchions",price:"$165 each"},
+    ]},
+    {title:"Recovers",rows:[
+      {label:"Under 50 Yards",price:"$116 / yd"},
+      {label:"Over 50 Yards",price:"$105 / yd"},
+    ]},
+    {title:"Retractable Awnings — Service",rows:[
+      {label:"Recover",price:"$132 / yd"},
+      {label:"Replace Motor",price:"$1,815"},
+      {label:"Replace Arms",price:"Vendor Price"},
+    ],note:"Size, Front Bar Connector, Shoulder Arms — Replace All Arms"},
+  ];
+
+  const commercial = [
+    {title:"Shed Door Awnings",rows:[
+      {label:"Each",price:"$1,375 each"},
+      {label:"3 or more",price:"$1,045 each"},
+    ]},
+    {title:"Barrel Door Awnings",rows:[
+      {label:"Each",price:"$1,628 each"},
+      {label:"2 or more",price:"$1,408 each"},
+    ]},
+    {title:"Deck Awnings (Seasonal)",rows:[
+      {label:"Under 150 sq'",price:"$33 / sq'"},
+      {label:"Over 150 sq'",price:"$31 / sq'"},
+    ]},
+    {title:"Deck Awnings (All Season / Up & Over)",rows:[
+      {label:"Under 150 sq'",price:"$37 / sq'"},
+      {label:"Over 150 sq'",price:"$35 / sq'"},
+    ]},
+    {title:"Truss Rafters",rows:[
+      {label:"Under 150 sq'",price:"$35 / sq'"},
+      {label:"Over 150 sq'",price:"$33 / sq'"},
+    ]},
+    {title:"A-Frame / Hip Awnings",rows:[
+      {label:"A-Frame",price:"$33 / sq'"},
+      {label:"Hip",price:"$37 / sq'"},
+    ]},
+    {title:"Roll Curtains",rows:[
+      {label:"Vinyl / Clear — Zippers or Bungee",price:"$19 / sq'"},
+      {label:"Soltis — Zippers or Tie",price:"$22 / sq'"},
+    ]},
+    {title:"Stairway Canopies",rows:[
+      {label:"Up to 9' Wide",price:"$495 / ln ft"},
+      {label:"9' to 12' Wide",price:"$660 / ln ft"},
+    ]},
+    {title:"Walkway Canopies",rows:[
+      {label:"Up to 9' Wide",price:"$440 / ln ft"},
+      {label:"9' to 12'",price:"$523 / ln ft"},
+    ]},
+    {title:"Storefront Sheds / Open Ends — 12ft Wide",rows:[
+      {label:"Rise + Run = 5'",price:"$182 / ln ft"},
+      {label:"Rise + Run = 6'–8'",price:"$204 / ln ft"},
+      {label:"OVER 12 FEET WIDE",price:"",header:true},
+      {label:"Rise + Run = 5'",price:"$154 / ln ft",indent:true},
+      {label:"Rise + Run = 6'–8'",price:"$187 / ln ft",indent:true},
+    ]},
+    {title:"Hardware & Accessories",rows:[
+      {label:"Double Stanchions",price:"$110 each"},
+      {label:"Footers for Stanchions",price:"$165 each"},
+      {label:"Wrap Double Stanchions",price:"$138 each"},
+    ]},
+    {title:"Vestibules",rows:[
+      {label:"Fix Frames / Vinyl-Clear Walls",price:"$26 / sq ft"},
+      {label:"Doors with Frames & Closers",price:"$1,650 each"},
+    ],note:"If a top is needed, charge separately for awning"},
+    {title:"Recovers",rows:[
+      {label:"Under 20 Yards",price:"$154 / yd"},
+      {label:"20–50 Yards",price:"$138 / yd"},
+      {label:"Over 51 Yards",price:"$132 / yd"},
+    ]},
+    {title:"Retractable Awnings — Service",rows:[
+      {label:"Recover",price:"$132 / yd"},
+      {label:"Replace Motor",price:"$1,815"},
+      {label:"Replace Arms",price:"Vendor Price"},
+    ],note:"Size, Front Bar Connector, Shoulder Arms — Replace All Arms"},
+    {title:"Graphics",rows:[
+      {label:"MINIMUM CHARGE",price:"$165",header:true},
+      {label:"Letters up to 6\"",price:"$11 each"},
+      {label:"Letters 7\"–10\"",price:"$13 each"},
+      {label:"Letters over 10\"",price:"$17 each"},
+    ]},
+    {title:"Logos",rows:[
+      {label:"0–2'6\"",price:"$385 each"},
+      {label:"5'",price:"x2"},
+      {label:"Enhance any logo (mandatory)",price:"+ $275"},
+    ],note:"All logos to be enhanced in-house"},
+  ];
+
+  const data = tab==="residential" ? residential : commercial;
+
+  return (
+    <div>
+      <div className="flex-between mb-20">
+        <div><div className="heading">Price Reference</div><div className="text-xs" style={{marginTop:4}}>2026 pricing · All prices include 10% markup over 2022 base</div></div>
+        <div style={{display:"flex",gap:4}}>
+          {[["residential","🏠 Residential"],["commercial","🏢 Commercial"]].map(([k,label])=>(
+            <button key={k} onClick={()=>setTab(k)} className="btn-sm" style={{padding:"8px 16px",fontSize:12,background:tab===k?"var(--primary)":"none",color:tab===k?"#fff":"var(--text-mid)",borderColor:tab===k?"var(--primary)":"var(--border)",fontWeight:tab===k?600:400}}>{label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="alert mb-20" style={{background:"rgba(27,67,50,.04)",border:"1px solid rgba(27,67,50,.15)"}}>
+        <span className="alert-icon">💰</span>
+        <div><div className="fw-600 text-primary" style={{fontSize:13}}>{tab==="residential"?"Residential":"Commercial"} Pricing Guide</div><div className="text-sm">Quick reference for quoting. All prices reflect current 2026 rates.</div></div>
+      </div>
+
+      <div className="grid-2" style={{alignItems:"start"}}>
+        <div>{data.filter((_,i)=>i%2===0).map((s,i)=><PriceTable key={i} {...s}/>)}</div>
+        <div>{data.filter((_,i)=>i%2===1).map((s,i)=><PriceTable key={i} {...s}/>)}</div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════
+// ── MODAL: LEAD DETAIL ──
+// ═══════════════════════════
+
+function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile}) {
+  if(!lead) return null;
+  const [editing,setEditing]=useState(false);
+  const [form,setForm]=useState({...lead});
+  const [confirmDel,setConfirmDel]=useState(false);
+  const [showNote,setShowNote]=useState(false);
+  const [noteText,setNoteText]=useState("");
+  const [noteType,setNoteType]=useState("note");
+
+  const doSave=()=>{const{id,createdAt,updatedAt,closedAt,activity,...rest}=form;update(lead.id,rest);setEditing(false)};
+  const doNote=()=>{if(!noteText.trim())return;logActivity(lead.id,{type:noteType,text:noteText,date:now(),by:lead.rep});setNoteText("");setShowNote(false)};
+  const cold=isCold(lead), days=daysAgo(lead.updatedAt), tk=tplKey(lead);
+
+  const Field=({label,k,type="text",opts})=>(
+    <div style={{marginBottom:14}}>
+      <div className="label" style={{marginBottom:4}}>{label}</div>
+      {editing ? (
+        opts ? <select className="input" value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}>{k==="lossReason"&&<option value="">Select...</option>}{opts.map(o=><option key={o}>{o}</option>)}</select>
+        : type==="number" ? <input className="input" type="number" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:Number(e.target.value)}))}/>
+        : type==="textarea" ? <textarea className="input" value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} rows={3} style={{resize:"vertical",fontFamily:"var(--font)"}}/>
+        : <input className="input" value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>
+      ) : <div style={{fontSize:14,fontWeight:k==="value"?700:400,color:k==="value"?"var(--primary)":"var(--text)"}}>{k==="value"?fmt(lead[k]):(lead[k]||"—")}</div>}
+    </div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:620}}>
+        <div className="flex-between mb-20">
+          <div>
+            <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600}}>{lead.name}</h3>
+            <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+              <Badge stage={lead.stage}/>
+              <span className="badge" style={{background:"var(--bg)",color:"var(--text-lt)"}}>{lead.product}</span>
+              {cold&&<ColdTag days={days}/>}
+              {lead.stage==="Lost"&&<LossTag reason={lead.lossReason}/>}
+              {lead.referredBy&&<span className="badge" style={{background:"rgba(212,160,23,.1)",color:"var(--accent)",border:"1px solid rgba(212,160,23,.25)"}}>Ref: {lead.referredBy}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"var(--text-lt)"}}>×</button>
+        </div>
+
+        {!["Won","Lost"].includes(lead.stage)&&<div className="alert mb-20" style={{background:cold?"rgba(220,38,38,.04)":"var(--bg)",border:`1px solid ${cold?"rgba(220,38,38,.15)":"var(--border)"}`}}><span className="text-sm fw-600" style={{color:cold?"var(--cold)":"var(--text-mid)"}}>{cold?"🥶 Needs attention!":"Quick outreach:"}</span><Outreach lead={lead} tpl={tk} onLog={logActivity}/></div>}
+        {lead.stage==="Lost"&&<div className="alert mb-20" style={{background:"rgba(212,160,23,.04)",border:"1px solid rgba(212,160,23,.2)"}}><span className="text-sm">🔄 Winback:</span><Outreach lead={lead} tpl="winback" onLog={logActivity}/></div>}
+
+        <div className="grid-2" style={{gap:"0 20px"}}>
+          <Field label="Contact" k="contact"/><Field label="Phone" k="phone"/>
+          <Field label="Email" k="email"/><Field label="Address" k="address"/>
+          <Field label="Product" k="product" opts={PRODUCTS}/><Field label="Source" k="source" opts={SOURCES}/>
+          <Field label="Rep" k="rep" opts={REPS}/><Field label="Stage" k="stage" opts={STAGES}/>
+          <Field label="Value" k="value" type="number"/><Field label="Referred By" k="referredBy"/>
+          {lead.stage==="Lost"&&<Field label="Loss Reason" k="lossReason" opts={LOSS_REASONS}/>}
+          <div style={{marginBottom:14}}><div className="label" style={{marginBottom:4}}>Created</div><div style={{fontSize:14}}>{lead.createdAt}</div></div>
+        </div>
+        <Field label="Notes" k="notes" type="textarea"/>
+
+        {/* Files & Documents */}
+        <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid var(--border)"}}>
+          <FileManager
+            files={lead.files}
+            onAdd={(file) => addFile(lead.id, file)}
+            onDelete={(fileId) => delFile(lead.id, fileId)}
+          />
+        </div>
+
+        <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid var(--border)"}}>
+          <div className="flex-between mb-12"><div className="heading-sm">Activity Timeline</div><button onClick={()=>setShowNote(true)} className="btn-sm">+ Add Note</button></div>
+          {showNote&&<div style={{background:"var(--bg)",borderRadius:8,padding:12}} className="mb-12">
+            <div style={{display:"flex",gap:8}} className="mb-12">{["note","call","email","text"].map(t=><button key={t} onClick={()=>setNoteType(t)} className="btn-sm" style={{background:noteType===t?"rgba(212,160,23,.1)":"none",color:noteType===t?"var(--accent)":"var(--text-mid)",borderColor:noteType===t?"var(--accent)":"var(--border)"}}>{{note:"📝 Note",call:"📞 Call",email:"✉️ Email",text:"💬 Text"}[t]}</button>)}</div>
+            <textarea className="input mb-12" value={noteText} onChange={e=>setNoteText(e.target.value)} placeholder="What happened?" rows={2} style={{resize:"vertical",fontFamily:"var(--font)"}}/>
+            <div style={{display:"flex",gap:8}}><button onClick={doNote} className="btn-primary" style={{padding:"6px 16px",fontSize:12}}>Save</button><button onClick={()=>setShowNote(false)} className="btn-outline" style={{padding:"6px 12px",fontSize:12}}>Cancel</button></div>
+          </div>}
+          <Timeline items={lead.activity}/>
+        </div>
+
+        <div style={{display:"flex",gap:8,marginTop:20,paddingTop:16,borderTop:"1px solid var(--border)"}}>
+          {editing ? (<>
+            <button onClick={doSave} className="btn-primary" style={{flex:1}}>Save Changes</button>
+            <button onClick={()=>{setForm({...lead});setEditing(false)}} className="btn-outline">Cancel</button>
+          </>) : (<>
+            <button onClick={()=>setEditing(true)} className="btn-primary" style={{flex:1}}>Edit Lead</button>
+            {!["Won","Lost"].includes(lead.stage)&&<><button onClick={()=>update(lead.id,{stage:"Won"})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>Won</button><button onClick={()=>update(lead.id,{stage:"Lost"})} className="btn-action" style={{background:"rgba(155,44,44,.08)",color:"var(--lost)",padding:"10px 16px",fontSize:13}}>Lost</button></>}
+            {lead.stage==="Lost"&&<button onClick={()=>update(lead.id,{stage:"Contacted",closedAt:null,revivalDismissed:false})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Re-open</button>}
+            {confirmDel?<button onClick={()=>del(lead.id)} className="btn-action" style={{background:"var(--lost)",color:"#fff",padding:"10px 16px",fontSize:13}}>Confirm Delete</button>:<button onClick={()=>setConfirmDel(true)} className="btn-sm" style={{color:"var(--lost)",borderColor:"rgba(155,44,44,.3)"}}>🗑</button>}
+          </>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════
+// ── MODAL: ADD LEAD ──
+// ═══════════════════════════
+
+function AddModal({onClose,addLead}) {
+  const [form,setForm]=useState({name:"",contact:"",phone:"",email:"",address:"",product:PRODUCTS[0],source:SOURCES[0],rep:REPS[1],stage:"New Lead",value:0,notes:"",referredBy:""});
+  const submit=()=>{if(!form.name.trim()||!form.contact.trim())return;addLead({...form,activity:[{type:"note",text:"Lead created",date:now(),by:form.rep}]})};
+  const F=({label,k,type="text",opts})=>(
+    <div style={{marginBottom:14}}><div className="label" style={{marginBottom:4}}>{label}</div>
+    {opts?<select className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select>
+    :type==="number"?<input className="input" type="number" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:Number(e.target.value)}))}/>
+    :type==="textarea"?<textarea className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} rows={3} style={{resize:"vertical",fontFamily:"var(--font)"}}/>
+    :<input className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} placeholder={label}/>}</div>
+  );
+  return (
+    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
+      <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>New Lead</h3>
+      <div className="grid-2" style={{gap:"0 20px"}}><F label="Lead Name *" k="name"/><F label="Contact Name *" k="contact"/><F label="Phone" k="phone"/><F label="Email" k="email"/><F label="Address" k="address"/><F label="Value" k="value" type="number"/><F label="Product" k="product" opts={PRODUCTS}/><F label="Source" k="source" opts={SOURCES}/><F label="Rep" k="rep" opts={REPS}/><F label="Stage" k="stage" opts={ACTIVE_STAGES}/><F label="Referred By" k="referredBy"/></div>
+      <F label="Notes" k="notes" type="textarea"/>
+      <div style={{display:"flex",gap:8,marginTop:16}}><button onClick={submit} className="btn-primary" style={{flex:1,fontSize:14}}>Add Lead</button><button onClick={onClose} className="btn-outline">Cancel</button></div>
+    </div></div>
+  );
+}
+
+// ── Import Quote Field Maps ──
+const PRODUCT_MAP = {"Retractable Awning":"Retractable Awnings","Retractable":"Retractable Awnings","Shed Door Awning":"Shed Door Awnings","Shed Door":"Shed Door Awnings","Barrel Door Awning":"Barrel Door Awnings","Barrel Door":"Barrel Door Awnings","Deck Awning Seasonal":"Deck Awnings (Seasonal)","Deck Awning All":"Deck Awnings (All Season)","A-Frame":"A-Frame / Hip Awnings","Hip Awning":"A-Frame / Hip Awnings","Truss":"Truss Rafters","Truss Rafter":"Truss Rafters","Vinyl Roll":"Vinyl Roll Curtains","Soltis":"Soltis Roll Curtains","Stairway":"Stairway Canopies","Stairway Canopy":"Stairway Canopies","Walkway":"Walkway Canopies","Walkway Canopy":"Walkway Canopies","Storefront":"Storefront Sheds","Vestibule":"Vestibules","Recover":"Recovers","Pergola":"Pergolas","Sunroom":"3-Season Sunrooms","3 Season":"3-Season Sunrooms","3-Season":"3-Season Sunrooms","Hurricane":"Hurricane Shutters","Hurricane Shutter":"Hurricane Shutters","Motorized Screen":"Motorized Screens","Hard Roof":"Hard Roofs"};
+const SOURCE_MAP = {"Referral":"Referral","Referred":"Referral","Phone":"Phone/Inbound","Called":"Phone/Inbound","Inbound":"Phone/Inbound","Walk-in":"Phone/Inbound","Walk In":"Phone/Inbound","Repeat":"Repeat Customer","Return":"Repeat Customer","Previous":"Repeat Customer"};
+const REP_MAP = {"LH":"Larry","JA":"John","NF":"Nick"};
+
+function mapProduct(raw){if(!raw)return"Other";const r=raw.trim();if(PRODUCTS.includes(r))return r;for(const[k,v]of Object.entries(PRODUCT_MAP))if(r.toLowerCase().includes(k.toLowerCase()))return v;return"Other"}
+function mapSource(raw){if(!raw)return"Other";const r=raw.trim();if(SOURCES.includes(r))return r;for(const[k,v]of Object.entries(SOURCE_MAP))if(r.toLowerCase().includes(k.toLowerCase()))return v;return"Other"}
+function mapRep(raw){if(!raw)return"Unassigned";const r=raw.trim().toUpperCase();if(REP_MAP[r])return REP_MAP[r];for(const rep of REPS)if(raw.toLowerCase().includes(rep.toLowerCase()))return rep;return"Unassigned"}
+
+function ImportQuoteModal({onClose,addLead,leads,initialData}) {
+  const [err,setErr]=useState("");
+  const [dupes,setDupes]=useState([]);
+  const fileRef=useRef(null);
+
+  const buildForm = (d) => ({
+    name: d.name || "",
+    contact: d.contact || "",
+    phone: d.phone || "",
+    email: d.email || "",
+    address: d.address || "",
+    product: PRODUCTS.includes(d.product) ? d.product : mapProduct(d.product),
+    source: SOURCES.includes(d.source) ? d.source : mapSource(d.source),
+    rep: REPS.includes(d.rep) ? d.rep : mapRep(d.rep),
+    stage: STAGES.includes(d.stage) ? d.stage : (ACTIVE_STAGES.includes(d.stage) ? d.stage : "New Lead"),
+    value: Number(d.value) || 0,
+    notes: d.notes || "",
+    referredBy: d.referredBy || ""
+  });
+
+  const [form,setForm]=useState(() => {
+    if(initialData) {
+      const m = buildForm(initialData);
+      return m;
+    }
+    return null;
+  });
+
+  // Check for duplicates when form loads
+  useEffect(() => {
+    if(!form) return;
+    const dl = leads.filter(l =>
+      (form.contact && l.contact.toLowerCase() === form.contact.toLowerCase()) ||
+      (form.phone && l.phone.replace(/\D/g,"") === form.phone.replace(/\D/g,"") && form.phone.length > 5)
+    );
+    setDupes(dl);
+  }, [form?.contact, form?.phone]);
+
+  const handleFile = (e) => {
+    const file = e.target.files?.[0] || (e.dataTransfer?.files?.[0]);
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try { setForm(buildForm(JSON.parse(ev.target.result))); setErr(""); }
+      catch(ex) { setErr("Could not read that file. Make sure you exported from Access first."); }
+    };
+    reader.readAsText(file);
+  };
+
+  const submit = () => {
+    if(!form.name.trim() || !form.contact.trim()) { setErr("Lead Name and Contact are required."); return; }
+    addLead({...form, activity:[{type:"note",text:"Imported from Access QuoteDB",date:now(),by:form.rep}]});
+    onClose();
+  };
+
+  const F=({label,k,type="text",opts})=>(
+    <div style={{marginBottom:14}}><div className="label" style={{marginBottom:4}}>{label}</div>
+    {opts?<select className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select>
+    :type==="number"?<input className="input" type="number" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:Number(e.target.value)}))}/>
+    :type==="textarea"?<textarea className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} rows={3} style={{resize:"vertical",fontFamily:"var(--font)"}}/>
+    :<input className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} placeholder={label}/>}</div>
+  );
+
+  return (
+    <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}>
+      <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>Import Quote from Access</h3>
+
+      {!form && (<div>
+        <div style={{textAlign:"center",padding:"12px 0 20px"}}>
+          <div style={{fontSize:14,color:"var(--text-mid)",marginBottom:16}}>To import a quote, double-click <strong>"Export Quote to CRM"</strong> on your desktop while the quote is open in Access. The data will load here automatically.</div>
+          <div style={{fontSize:12,color:"var(--text-lt)",marginBottom:16}}>If you already ran the export, you can load the backup file:</div>
+          <div className="dropzone" onClick={()=>fileRef.current?.click()} onDrop={e=>{e.preventDefault();handleFile(e)}} onDragOver={e=>e.preventDefault()}>
+            <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={handleFile}/>
+            <div style={{fontSize:24,marginBottom:4}}>📂</div>
+            <div className="fw-600" style={{fontSize:13,color:"var(--text-mid)"}}>Click to find the export file</div>
+          </div>
+        </div>
+        {err && <div style={{color:"var(--lost)",fontSize:12,marginTop:8}}>{err}</div>}
+        <div style={{display:"flex",gap:8,marginTop:16}}><button onClick={onClose} className="btn-outline" style={{flex:1}}>Cancel</button></div>
+      </div>)}
+
+      {form && (<div>
+        {dupes.length > 0 && (
+          <div className="alert mb-16" style={{background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.25)"}}>
+            <span className="alert-icon">⚠️</span>
+            <div><div className="fw-600" style={{fontSize:13,color:"var(--quote)"}}>Possible duplicate{dupes.length>1?"s":""} found</div>
+            <div className="text-sm">Already in CRM: {dupes.map(d=>d.name).join(", ")}</div></div>
+          </div>
+        )}
+        {err && <div style={{color:"var(--lost)",fontSize:12,marginBottom:12}}>{err}</div>}
+        <div className="grid-2" style={{gap:"0 20px"}}>
+          <F label="Lead Name *" k="name"/><F label="Contact Name *" k="contact"/>
+          <F label="Phone" k="phone"/><F label="Email" k="email"/>
+          <F label="Address" k="address"/><F label="Value" k="value" type="number"/>
+          <F label="Product" k="product" opts={PRODUCTS}/><F label="Source" k="source" opts={SOURCES}/>
+          <F label="Rep" k="rep" opts={REPS}/><F label="Stage" k="stage" opts={ACTIVE_STAGES}/>
+          <F label="Referred By" k="referredBy"/>
+        </div>
+        <F label="Notes" k="notes" type="textarea"/>
+        <div style={{display:"flex",gap:8,marginTop:16}}>
+          <button onClick={submit} className="btn-primary" style={{flex:1,fontSize:14}}>Import Lead</button>
+          <button onClick={onClose} className="btn-outline">Cancel</button>
+        </div>
+      </div>)}
+    </div></div>
+  );
+}
+
+// ═══════════════════
+// ── MAIN APP ──
+// ═══════════════════
+
+function App() {
+  const [leads,setLeads]=useState(()=>load()||SEED);
+  const [view,setView]=useState("playbook");
+  const [selected,setSelected]=useState(null);
+  const [showAdd,setShowAdd]=useState(false);
+  const [showImport,setShowImport]=useState(false);
+  const [importData,setImportData]=useState(null);
+  const [fRep,setFRep]=useState("All");
+  const [fProd,setFProd]=useState("All");
+  const [fStage,setFStage]=useState("All");
+  const [search,setSearch]=useState("");
+  const [mapStage,setMapStage]=useState("All");
+
+  useEffect(()=>{save(leads)},[leads]);
+
+  // Auto-detect import data from Export script (stored in localStorage by launcher)
+  useEffect(()=>{
+    try {
+      const raw = localStorage.getItem('lfpease-crm-import');
+      if(raw) {
+        const pkg = JSON.parse(raw);
+        // Only use if less than 5 minutes old
+        if(pkg.data && pkg.ts && (Date.now() - pkg.ts) < 300000) {
+          setImportData(pkg.data);
+          setShowImport(true);
+        }
+        localStorage.removeItem('lfpease-crm-import');
+      }
+    } catch(e) {}
+  },[]);
+
+  const coldN=useMemo(()=>leads.filter(isCold).length,[leads]);
+  const revN=useMemo(()=>leads.filter(isRevival).length,[leads]);
+  const actionN=useMemo(()=>{return leads.filter(isCold).length+leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).length+leads.filter(l=>l.stage==="Quote Sent").length+leads.filter(l=>l.stage==="Negotiating").length},[leads]);
+  const stats=useStats(leads);
+
+  const update=useCallback((id,u)=>{setLeads(p=>p.map(l=>{if(l.id!==id)return l;const r={...l,...u,updatedAt:now()};if(u.stage==="Won"||u.stage==="Lost")r.closedAt=now();return r}))},[]);
+  const add=useCallback(l=>{setLeads(p=>[...p,{...l,id:uid(),createdAt:now(),updatedAt:now()}]);setShowAdd(false);setShowImport(false);setImportData(null)},[]);
+  const del=useCallback(id=>{setLeads(p=>p.filter(l=>l.id!==id));setSelected(null)},[]);
+  const log=useCallback((id,entry)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,activity:[...(l.activity||[]),entry],updatedAt:now()}))},[]);
+  const addFile=useCallback((id,file)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:[...(l.files||[]),file]}))},[]);
+  const delFile=useCallback((id,fileId)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:(l.files||[]).filter(f=>f.id!==fileId)}))},[]);
+
+  const filtered=useMemo(()=>leads.filter(l=>{
+    if(fRep!=="All"&&l.rep!==fRep)return false;if(fProd!=="All"&&l.product!==fProd)return false;if(fStage!=="All"&&l.stage!==fStage)return false;
+    if(search&&!l.name.toLowerCase().includes(search.toLowerCase())&&!l.contact.toLowerCase().includes(search.toLowerCase()))return false;return true;
+  }),[leads,fRep,fProd,fStage,search]);
+
+  const NAV=[["playbook","📋 Playbook"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["reps","Reps"]];
+
+  return (
+    <div style={{minHeight:"100vh"}}>
+      <header className="header">
+        <div className="logo"><div className="logo-icon">LFP</div><div><div className="logo-text">L.F. Pease</div><div className="logo-sub">Awning & Sunroom Co.</div></div></div>
+        <nav className="nav">{NAV.map(([k,label])=>(
+          <button key={k} className={`nav-btn ${view===k?"active":""}`} onClick={()=>{setView(k);setSelected(null)}}>
+            {label}
+            {k==="cold"&&coldN>0&&<span className="nav-badge" style={{background:"var(--cold)"}}>{coldN}</span>}
+            {k==="revival"&&revN>0&&<span className="nav-badge" style={{background:"var(--accent)",color:"var(--primary)"}}>{revN}</span>}
+            {k==="playbook"&&actionN>0&&<span className="nav-badge" style={{background:"var(--quote)"}}>{actionN}</span>}
+          </button>
+        ))}</nav>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button className="btn-outline" style={{padding:"8px 14px",fontSize:13,fontWeight:600,color:"#fff",borderColor:"rgba(255,255,255,.3)",background:"transparent"}} onClick={()=>setShowImport(true)}>Import Quote</button>
+          <button className="btn-add" onClick={()=>setShowAdd(true)}>+ New Lead</button>
+        </div>
+      </header>
+
+      <main className="main">
+        {view==="playbook"&&<PlaybookView leads={leads} setSelected={setSelected} logActivity={log}/>}
+        {view==="dashboard"&&<DashView stats={stats} leads={leads} setView={setView} setSelected={setSelected} coldN={coldN} actionN={actionN}/>}
+        {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep}/>}
+        {view==="map"&&<MapView leads={leads} setSelected={setSelected} fStage={mapStage} setFStage={setMapStage}/>}
+        {view==="cold"&&<ColdView leads={leads} setSelected={setSelected} logActivity={log}/>}
+        {view==="revival"&&<RevivalView leads={leads} setSelected={setSelected} update={update} logActivity={log}/>}
+        {view==="referrals"&&<ReferralView leads={leads} setSelected={setSelected}/>}
+        {view==="pricing"&&<PriceRefView/>}
+        {view==="leads"&&<LeadsTable leads={filtered} setSelected={setSelected} fRep={fRep} setFRep={setFRep} fProd={fProd} setFProd={setFProd} fStage={fStage} setFStage={setFStage} search={search} setSearch={setSearch}/>}
+        {view==="reps"&&<RepsView stats={stats} setView={setView} setFRep={setFRep}/>}
+      </main>
+
+      {selected&&<LeadModal lead={leads.find(l=>l.id===selected)} onClose={()=>setSelected(null)} update={update} del={del} logActivity={log} addFile={addFile} delFile={delFile}/>}
+      {showAdd&&<AddModal onClose={()=>setShowAdd(false)} addLead={add}/>}
+      {showImport&&<ImportQuoteModal onClose={()=>{setShowImport(false);setImportData(null)}} addLead={add} leads={leads} initialData={importData}/>}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+try { root.render(<App/>) } catch(e) {
+  document.getElementById("root").innerHTML = `<div style="padding:40px;font-family:sans-serif"><h2>Loading Error</h2><p>Check internet connection.</p><pre style="background:#f5f5f5;padding:16px;border-radius:8px;overflow:auto">${e.message}</pre></div>`;
+}
+</script>
+
+</body>
+</html>
