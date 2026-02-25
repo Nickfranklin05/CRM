@@ -141,6 +141,14 @@ const REPS = ["Unassigned","Larry","John","Nick"];
 const COLD_DAYS = 14;
 const LOSS_REASONS = ["Price/Budget","Went with Competitor","Timing/Not Ready","Ghosted/No Response","Changed Mind","Other"];
 
+const USERS = [
+  {name:"Michelle", role:"admin", label:"Michelle (Admin)"},
+  {name:"Nick", role:"rep", label:"Nick"},
+  {name:"Larry", role:"rep", label:"Larry"},
+  {name:"John", role:"rep", label:"John"},
+];
+const USER_SK = "lfpease-crm-user";
+
 const STAGE_COLORS = {"New Lead":"var(--new)","Contacted":"var(--contacted)","Quote Sent":"var(--quote)","Negotiating":"var(--negotiating)","Won":"var(--won)","Lost":"var(--lost)"};
 const STAGE_HEX = {"New Lead":"#2563EB","Contacted":"#7C3AED","Quote Sent":"#D97706","Negotiating":"#0891B2","Won":"#2D6A4F","Lost":"#9B2C2C"};
 const PIE_COLORS = ["#1B4332","#D4A017","#2563EB","#9B2C2C","#7C3AED","#0891B2"];
@@ -350,6 +358,36 @@ function FileManager({files,onAdd,onDelete}) {
 }
 
 // ═══════════════════════
+// ── LOGIN SCREEN ──
+// ═══════════════════════
+
+function LoginScreen({onLogin}) {
+  const icons = {admin:"👑", rep:"📋"};
+  return (
+    <div style={{minHeight:"100vh",background:"var(--primary)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}>
+      <div style={{textAlign:"center",marginBottom:40}}>
+        <div style={{width:64,height:64,background:"var(--accent)",borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:24,color:"var(--primary)",margin:"0 auto 16px"}}>LFP</div>
+        <div style={{fontFamily:"var(--font-display)",fontSize:28,fontWeight:600,color:"#fff",letterSpacing:".02em"}}>L.F. Pease</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,.5)",letterSpacing:".15em",textTransform:"uppercase",marginTop:4}}>Awning & Sunroom Co.</div>
+        <div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginTop:20}}>Select your account to continue</div>
+      </div>
+      <div className="grid-2" style={{maxWidth:460,width:"100%",gap:16}}>
+        {USERS.map(u => (
+          <div key={u.name} className="card hover-scale" onClick={()=>onLogin(u)}
+            style={{padding:"28px 20px",textAlign:"center",cursor:"pointer",transition:"all .2s",borderRadius:14,border:"2px solid transparent"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent)"}
+            onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
+            <div style={{fontSize:32,marginBottom:8}}>{icons[u.role]||"👤"}</div>
+            <div className="fw-700" style={{fontSize:17,color:"var(--primary)",marginBottom:4}}>{u.name}</div>
+            <div className="text-xs" style={{textTransform:"uppercase",letterSpacing:".1em"}}>{u.role}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════
 // ── STATS CALCULATOR ──
 // ═══════════════════════
 
@@ -385,7 +423,7 @@ function useStats(leads) {
 // ── VIEW: TODAY'S PLAYBOOK ──
 // ══════════════════════════
 
-function PlaybookView({leads,setSelected,logActivity}) {
+function PlaybookView({leads,setSelected,logActivity,isAdmin}) {
   const cold = leads.filter(isCold).sort((a,b)=>b.value-a.value);
   const revival = leads.filter(isRevival).sort((a,b)=>b.value-a.value);
   const fresh = leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).sort((a,b)=>b.value-a.value);
@@ -449,7 +487,7 @@ function PlaybookView({leads,setSelected,logActivity}) {
         <Section icon="🔄" title="Win Back Lost Leads" sub="60+ days, time to reconnect" color="#D4A017" items={revival} tpl="winback"/>
       </div>)}
 
-      <div className="card card-pad mt-24">
+      {isAdmin && <div className="card card-pad mt-24">
         <div className="heading-sm mb-16">Action Items by Rep</div>
         <div className="grid-3">
           {REPS.filter(r=>r!=="Unassigned").map(rep => {
@@ -468,7 +506,7 @@ function PlaybookView({leads,setSelected,logActivity}) {
             );
           })}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -611,10 +649,10 @@ function DashView({stats,leads,setView,setSelected,coldN,actionN}) {
 // ── VIEW: PIPELINE ──
 // ═════════════════
 
-function PipeView({leads,update,setSelected,filterRep,setFilterRep}) {
+function PipeView({leads,update,setSelected,filterRep,setFilterRep,isAdmin}) {
   return (
     <div>
-      <div className="flex-between mb-20"><div className="heading">Sales Pipeline</div><select className="select" value={filterRep} onChange={e=>setFilterRep(e.target.value)}><option value="All">All Reps</option>{REPS.filter(r=>r!=="Unassigned").map(r=><option key={r}>{r}</option>)}</select></div>
+      <div className="flex-between mb-20"><div className="heading">Sales Pipeline</div>{isAdmin&&<select className="select" value={filterRep} onChange={e=>setFilterRep(e.target.value)}><option value="All">All Reps</option>{REPS.filter(r=>r!=="Unassigned").map(r=><option key={r}>{r}</option>)}</select>}</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr) .8fr .8fr",gap:12,overflowX:"auto"}}>
         {STAGES.map(stage => {
           const sl=leads.filter(l=>l.stage===stage), sv=sl.reduce((s,l)=>s+l.value,0), closed=stage==="Won"||stage==="Lost";
@@ -1061,7 +1099,7 @@ function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile}) {
 
 function AddModal({onClose,addLead}) {
   const [form,setForm]=useState({name:"",contact:"",phone:"",email:"",address:"",product:PRODUCTS[0],source:SOURCES[0],rep:REPS[1],stage:"New Lead",value:0,notes:"",referredBy:""});
-  const submit=()=>{if(!form.name.trim()||!form.contact.trim())return;addLead({...form,activity:[{type:"note",text:"Lead created",date:now(),by:form.rep}]})};
+  const submit=()=>{if(!form.name.trim()||!form.contact.trim())return;addLead({...form})};
   const F=({label,k,type="text",opts})=>(
     <div style={{marginBottom:14}}><div className="label" style={{marginBottom:4}}>{label}</div>
     {opts?<select className="input" value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}>{opts.map(o=><option key={o}>{o}</option>)}</select>
@@ -1083,14 +1121,13 @@ function AddModal({onClose,addLead}) {
 // ── VIEW: NEW LEADS ──
 // ══════════════════════════
 
-function NewLeadsView({leads,update,setSelected,logActivity}) {
+function NewLeadsView({leads,assign,setSelected}) {
   const newLeads = useMemo(()=>leads.filter(l=>l.stage==="New Lead").sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)),[leads]);
   const unassigned = newLeads.filter(l=>!l.rep||l.rep==="Unassigned");
   const assigned = newLeads.filter(l=>l.rep&&l.rep!=="Unassigned");
 
   const assignRep = (id,rep) => {
-    update(id,{rep,stage:"Contacted"});
-    logActivity(id,{type:"note",text:`Assigned to ${rep} and moved to Contacted`,date:now(),by:rep});
+    assign(id,rep);
   };
 
   const LeadRow = ({lead}) => (
@@ -1198,10 +1235,16 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     setLoading(true);
     const startTime = Date.now();
 
+    // Snapshot old data so we can detect when the PS script writes new data
+    const oldPkg = window.__CRM_IMPORT_DATA;
+    const oldFingerprint = JSON.stringify(oldPkg?.data || null);
+    const fallbackData = oldPkg?.data ? {...oldPkg.data} : null;
+
     // Trigger the protocol handler (runs PS silently in background)
     try { window.location.href = "lfpcrm:import"; } catch(e) {}
 
     // Poll for the data file to be written
+    let lastLoaded = null;
     pollRef.current = setInterval(() => {
       window.__CRM_IMPORT_DATA = null;
       const old = document.getElementById("crm-poll-script");
@@ -1211,12 +1254,17 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
       s.src = "crm-import-data.js?t=" + Date.now();
       s.onload = () => {
         const pkg = window.__CRM_IMPORT_DATA;
-        if(pkg && pkg.data && pkg.ts > startTime - 3000) {
-          clearInterval(pollRef.current);
-          clearTimeout(timeoutRef.current);
-          setForm(buildForm(pkg.data));
-          setLoading(false);
-          window.__CRM_IMPORT_DATA = null;
+        if(pkg && pkg.data) {
+          lastLoaded = pkg.data;
+          const newFingerprint = JSON.stringify(pkg.data);
+          // Accept if data content changed OR if ts is a proper fixed timestamp written after modal opened
+          if(newFingerprint !== oldFingerprint || (typeof pkg.ts === "number" && pkg.ts > startTime - 3000 && pkg.ts < startTime + 120000)) {
+            clearInterval(pollRef.current);
+            clearTimeout(timeoutRef.current);
+            setForm(buildForm(pkg.data));
+            setLoading(false);
+            window.__CRM_IMPORT_DATA = null;
+          }
         }
       };
       s.onerror = () => {};
@@ -1226,8 +1274,15 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     timeoutRef.current = setTimeout(() => {
       clearInterval(pollRef.current);
       setLoading(false);
-      setTimedOut(true);
-    }, 15000);
+      // Fallback: show whatever data we have (last polled or original snapshot)
+      const best = lastLoaded || fallbackData;
+      if(best) {
+        setForm(buildForm(best));
+        window.__CRM_IMPORT_DATA = null;
+      } else {
+        setTimedOut(true);
+      }
+    }, 12000);
 
     return () => { clearInterval(pollRef.current); clearTimeout(timeoutRef.current); };
   }, []);
@@ -1245,7 +1300,7 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
 
   const submit = () => {
     if(!form.name.trim() || !form.contact.trim()) { setErr("Lead Name and Contact are required."); return; }
-    addLead({...form, activity:[{type:"note",text:"Imported from Access QuoteDB",date:now(),by:form.rep}]});
+    addLead({...form, _importNote:"Imported from Access QuoteDB"});
     onClose();
   };
 
@@ -1330,14 +1385,20 @@ function App() {
   const [search,setSearch]=useState("");
   const [mapStage,setMapStage]=useState("All");
 
+  // ── User login state ──
+  const [currentUser,setCurrentUser]=useState(()=>{try{return JSON.parse(localStorage.getItem(USER_SK))}catch{return null}});
+  const handleLogin=useCallback(u=>{setCurrentUser(u);try{localStorage.setItem(USER_SK,JSON.stringify(u))}catch{}},[]);
+  const handleLogout=useCallback(()=>{setCurrentUser(null);try{localStorage.removeItem(USER_SK)}catch{}},[]);
+  const isAdmin=currentUser?.role==="admin";
+
   useEffect(()=>{save(leads)},[leads]);
 
   // Auto-detect import data from Export script (loaded via crm-import-data.js)
+  // Only auto-open if the ts is a proper fixed timestamp (not 0, and within 5 min)
   useEffect(()=>{
     try {
       const pkg = window.__CRM_IMPORT_DATA;
-      if(pkg && pkg.data && pkg.ts) {
-        // Only use if less than 5 minutes old and not already imported
+      if(pkg && pkg.data && typeof pkg.ts === "number" && pkg.ts > 1000000000000) {
         const lastTs = Number(localStorage.getItem('lfpease-last-import-ts')) || 0;
         if(pkg.ts > lastTs && (Date.now() - pkg.ts) < 300000) {
           setImportData(pkg.data);
@@ -1348,31 +1409,50 @@ function App() {
     } catch(e) {}
   },[]);
 
-  const coldN=useMemo(()=>leads.filter(isCold).length,[leads]);
-  const revN=useMemo(()=>leads.filter(isRevival).length,[leads]);
-  const actionN=useMemo(()=>{return leads.filter(isCold).length+leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).length+leads.filter(l=>l.stage==="Quote Sent").length+leads.filter(l=>l.stage==="Negotiating").length},[leads]);
-  const stats=useStats(leads);
+  // ── Per-user lead filtering ──
+  const myLeads=useMemo(()=>{
+    if(!currentUser)return leads;
+    if(isAdmin)return leads;
+    return leads.filter(l=>l.rep===currentUser.name||l.rep==="Unassigned");
+  },[leads,currentUser,isAdmin]);
+
+  const coldN=useMemo(()=>myLeads.filter(isCold).length,[myLeads]);
+  const revN=useMemo(()=>myLeads.filter(isRevival).length,[myLeads]);
+  const actionN=useMemo(()=>{return myLeads.filter(isCold).length+myLeads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).length+myLeads.filter(l=>l.stage==="Quote Sent").length+myLeads.filter(l=>l.stage==="Negotiating").length},[myLeads]);
+  const newLeadN=useMemo(()=>myLeads.filter(l=>l.stage==="New Lead").length,[myLeads]);
+  const stats=useStats(myLeads);
 
   const update=useCallback((id,u)=>{setLeads(p=>p.map(l=>{if(l.id!==id)return l;const r={...l,...u,updatedAt:now()};if(u.stage==="Won"||u.stage==="Lost")r.closedAt=now();return r}))},[]);
-  const add=useCallback(l=>{setLeads(p=>[...p,{...l,id:uid(),createdAt:now(),updatedAt:now()}]);setShowAdd(false);setShowImport(false);setImportData(null);try{localStorage.setItem('lfpease-last-import-ts',String(Date.now()))}catch(e){}},[]);
+  const add=useCallback(l=>{const by=currentUser?currentUser.name:l.rep;const note=l._importNote||"Lead created";const{_importNote,...rest}=l;setLeads(p=>[...p,{...rest,id:uid(),createdAt:now(),updatedAt:now(),activity:[{type:"note",text:note,date:now(),by}]}]);setShowAdd(false);setShowImport(false);setImportData(null);if(rest.stage==="New Lead")setView("newleads");try{localStorage.setItem('lfpease-last-import-ts',String(Date.now()))}catch(e){}},[currentUser]);
   const del=useCallback(id=>{setLeads(p=>p.filter(l=>l.id!==id));setSelected(null)},[]);
-  const log=useCallback((id,entry)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,activity:[...(l.activity||[]),entry],updatedAt:now()}))},[]);
+  const log=useCallback((id,entry)=>{const stamped={...entry,by:currentUser?currentUser.name:entry.by};setLeads(p=>p.map(l=>l.id!==id?l:{...l,activity:[...(l.activity||[]),stamped],updatedAt:now()}))},[currentUser]);
   const addFile=useCallback((id,file)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:[...(l.files||[]),file]}))},[]);
   const delFile=useCallback((id,fileId)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:(l.files||[]).filter(f=>f.id!==fileId)}))},[]);
 
-  const filtered=useMemo(()=>leads.filter(l=>{
+  // ── Atomic assign for New Leads (fixes the bug) ──
+  const assign=useCallback((id,rep)=>{
+    const by=currentUser?currentUser.name:rep;
+    setLeads(p=>p.map(l=>{
+      if(l.id!==id)return l;
+      return {...l,rep,stage:"Contacted",updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:`Assigned to ${rep} and moved to Contacted`,date:now(),by}]};
+    }));
+  },[currentUser]);
+
+  const filtered=useMemo(()=>myLeads.filter(l=>{
     if(fRep!=="All"&&l.rep!==fRep)return false;if(fProd!=="All"&&l.product!==fProd)return false;if(fStage!=="All"&&l.stage!==fStage)return false;
     if(search&&!l.name.toLowerCase().includes(search.toLowerCase())&&!l.contact.toLowerCase().includes(search.toLowerCase()))return false;return true;
-  }),[leads,fRep,fProd,fStage,search]);
+  }),[myLeads,fRep,fProd,fStage,search]);
 
-  const newLeadN=useMemo(()=>leads.filter(l=>l.stage==="New Lead").length,[leads]);
   const NAV=[["playbook","📋 Playbook"],["newleads","New Leads"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["reps","Reps"]];
+
+  // ── Login gate (after all hooks) ──
+  if(!currentUser) return <LoginScreen onLogin={handleLogin}/>;
 
   return (
     <div style={{minHeight:"100vh"}}>
       <header className="header">
         <div className="logo"><div className="logo-icon">LFP</div><div><div className="logo-text">L.F. Pease</div><div className="logo-sub">Awning & Sunroom Co.</div></div></div>
-        <nav className="nav">{NAV.map(([k,label])=>(
+        <nav className="nav">{NAV.filter(([k])=>k!=="reps"||isAdmin).map(([k,label])=>(
           <button key={k} className={`nav-btn ${view===k?"active":""}`} onClick={()=>{setView(k);setSelected(null)}}>
             {label}
             {k==="cold"&&coldN>0&&<span className="nav-badge" style={{background:"var(--cold)"}}>{coldN}</span>}
@@ -1382,20 +1462,25 @@ function App() {
           </button>
         ))}</nav>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,color:"rgba(255,255,255,.8)",fontSize:12}}>
+            <span>{isAdmin?"👑":"📋"}</span>
+            <span className="fw-600">{currentUser.name}</span>
+          </div>
+          <button onClick={handleLogout} style={{padding:"4px 10px",borderRadius:4,border:"1px solid rgba(255,255,255,.2)",background:"transparent",color:"rgba(255,255,255,.5)",fontSize:11,cursor:"pointer",fontFamily:"var(--font)"}}>Logout</button>
           <button className="btn-outline" style={{padding:"8px 14px",fontSize:13,fontWeight:600,color:"#fff",borderColor:"rgba(255,255,255,.3)",background:"transparent"}} onClick={()=>setShowImport(true)}>Import Quote</button>
           <button className="btn-add" onClick={()=>setShowAdd(true)}>+ New Lead</button>
         </div>
       </header>
 
       <main className="main">
-        {view==="playbook"&&<PlaybookView leads={leads} setSelected={setSelected} logActivity={log}/>}
-        {view==="newleads"&&<NewLeadsView leads={leads} update={update} setSelected={setSelected} logActivity={log}/>}
-        {view==="dashboard"&&<DashView stats={stats} leads={leads} setView={setView} setSelected={setSelected} coldN={coldN} actionN={actionN}/>}
-        {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep}/>}
-        {view==="map"&&<MapView leads={leads} setSelected={setSelected} fStage={mapStage} setFStage={setMapStage}/>}
-        {view==="cold"&&<ColdView leads={leads} setSelected={setSelected} logActivity={log}/>}
-        {view==="revival"&&<RevivalView leads={leads} setSelected={setSelected} update={update} logActivity={log}/>}
-        {view==="referrals"&&<ReferralView leads={leads} setSelected={setSelected}/>}
+        {view==="playbook"&&<PlaybookView leads={myLeads} setSelected={setSelected} logActivity={log} isAdmin={isAdmin}/>}
+        {view==="newleads"&&<NewLeadsView leads={myLeads} assign={assign} setSelected={setSelected}/>}
+        {view==="dashboard"&&<DashView stats={stats} leads={myLeads} setView={setView} setSelected={setSelected} coldN={coldN} actionN={actionN}/>}
+        {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep} isAdmin={isAdmin}/>}
+        {view==="map"&&<MapView leads={myLeads} setSelected={setSelected} fStage={mapStage} setFStage={setMapStage}/>}
+        {view==="cold"&&<ColdView leads={myLeads} setSelected={setSelected} logActivity={log}/>}
+        {view==="revival"&&<RevivalView leads={myLeads} setSelected={setSelected} update={update} logActivity={log}/>}
+        {view==="referrals"&&<ReferralView leads={myLeads} setSelected={setSelected}/>}
         {view==="pricing"&&<PriceRefView/>}
         {view==="leads"&&<LeadsTable leads={filtered} setSelected={setSelected} fRep={fRep} setFRep={setFRep} fProd={fProd} setFProd={setFProd} fStage={fStage} setFStage={setFStage} search={search} setSearch={setSearch}/>}
         {view==="reps"&&<RepsView stats={stats} setView={setView} setFRep={setFRep}/>}
