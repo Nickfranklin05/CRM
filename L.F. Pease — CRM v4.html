@@ -1159,7 +1159,11 @@ function mapRep(raw){if(!raw)return"Unassigned";const r=raw.trim().toUpperCase()
 function ImportQuoteModal({onClose,addLead,leads,initialData}) {
   const [err,setErr]=useState("");
   const [dupes,setDupes]=useState([]);
+  const [loading,setLoading]=useState(false);
+  const [timedOut,setTimedOut]=useState(false);
   const fileRef=useRef(null);
+  const pollRef=useRef(null);
+  const timeoutRef=useRef(null);
 
   const buildForm = (d) => ({
     name: d.name || "",
@@ -1176,13 +1180,7 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     referredBy: d.referredBy || ""
   });
 
-  const [form,setForm]=useState(() => {
-    if(initialData) {
-      const m = buildForm(initialData);
-      return m;
-    }
-    return null;
-  });
+  const [form,setForm]=useState(() => initialData ? buildForm(initialData) : null);
 
   // Check for duplicates when form loads
   useEffect(() => {
@@ -1194,12 +1192,52 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     setDupes(dl);
   }, [form?.contact, form?.phone]);
 
+  // If no initialData, trigger protocol handler to read Access and poll for result
+  useEffect(() => {
+    if(initialData || form) return;
+    setLoading(true);
+    const startTime = Date.now();
+
+    // Trigger the protocol handler (runs PS silently in background)
+    try { window.location.href = "lfpcrm:import"; } catch(e) {}
+
+    // Poll for the data file to be written
+    pollRef.current = setInterval(() => {
+      window.__CRM_IMPORT_DATA = null;
+      const old = document.getElementById("crm-poll-script");
+      if(old) old.remove();
+      const s = document.createElement("script");
+      s.id = "crm-poll-script";
+      s.src = "crm-import-data.js?t=" + Date.now();
+      s.onload = () => {
+        const pkg = window.__CRM_IMPORT_DATA;
+        if(pkg && pkg.data && pkg.ts > startTime - 3000) {
+          clearInterval(pollRef.current);
+          clearTimeout(timeoutRef.current);
+          setForm(buildForm(pkg.data));
+          setLoading(false);
+          window.__CRM_IMPORT_DATA = null;
+        }
+      };
+      s.onerror = () => {};
+      document.head.appendChild(s);
+    }, 1000);
+
+    timeoutRef.current = setTimeout(() => {
+      clearInterval(pollRef.current);
+      setLoading(false);
+      setTimedOut(true);
+    }, 15000);
+
+    return () => { clearInterval(pollRef.current); clearTimeout(timeoutRef.current); };
+  }, []);
+
   const handleFile = (e) => {
     const file = e.target.files?.[0] || (e.dataTransfer?.files?.[0]);
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try { setForm(buildForm(JSON.parse(ev.target.result))); setErr(""); }
+      try { setForm(buildForm(JSON.parse(ev.target.result))); setErr(""); setTimedOut(false); }
       catch(ex) { setErr("Could not read that file. Make sure you exported from Access first."); }
     };
     reader.readAsText(file);
@@ -1223,10 +1261,21 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}>
       <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>Import Quote from Access</h3>
 
-      {!form && (<div>
+      {loading && (<div style={{textAlign:"center",padding:"32px 0"}}>
+        <div style={{fontSize:28,marginBottom:12,animation:"coldPulse 1.5s ease-in-out infinite"}}>Reading from Access...</div>
+        <div className="text-sm">Getting the current quote. This takes a couple seconds.</div>
+      </div>)}
+
+      {!form && !loading && (<div>
+        {timedOut && (
+          <div className="alert mb-16" style={{background:"rgba(155,44,44,.08)",border:"1px solid rgba(155,44,44,.25)"}}>
+            <span className="alert-icon">!</span>
+            <div><div className="fw-600" style={{fontSize:13,color:"var(--lost)"}}>Could not read from Access</div>
+            <div className="text-sm">Make sure a quote is open in Access. If this is your first time, run <strong>Setup-CRM-Import.bat</strong> from C:\QuoteDB first.</div></div>
+          </div>
+        )}
         <div style={{textAlign:"center",padding:"12px 0 20px"}}>
-          <div style={{fontSize:14,color:"var(--text-mid)",marginBottom:16}}>To import a quote, double-click <strong>"Export Quote to CRM"</strong> on your desktop while the quote is open in Access. The data will load here automatically.</div>
-          <div style={{fontSize:12,color:"var(--text-lt)",marginBottom:16}}>If you already ran the export, you can load the backup file:</div>
+          <div style={{fontSize:12,color:"var(--text-lt)",marginBottom:16}}>You can also load a previously exported file:</div>
           <div className="dropzone" onClick={()=>fileRef.current?.click()} onDrop={e=>{e.preventDefault();handleFile(e)}} onDragOver={e=>e.preventDefault()}>
             <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={handleFile}/>
             <div style={{fontSize:24,marginBottom:4}}>📂</div>
@@ -1240,7 +1289,7 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
       {form && (<div>
         {dupes.length > 0 && (
           <div className="alert mb-16" style={{background:"rgba(217,119,6,.08)",border:"1px solid rgba(217,119,6,.25)"}}>
-            <span className="alert-icon">⚠️</span>
+            <span className="alert-icon">!</span>
             <div><div className="fw-600" style={{fontSize:13,color:"var(--quote)"}}>Possible duplicate{dupes.length>1?"s":""} found</div>
             <div className="text-sm">Already in CRM: {dupes.map(d=>d.name).join(", ")}</div></div>
           </div>
