@@ -1613,11 +1613,71 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
       by:currentUser?.name||lead.rep, createdAt:now()
     });
     setSaved(true);
-    setTimeout(()=>{setClosing(true);setTimeout(()=>onClose(),350)},900);
   };
+
+  const closeOut=()=>{setClosing(true);setTimeout(()=>onClose(),350)};
 
   const fmtApptDate=(d,t)=>{
     try{const dt=new Date(d+"T00:00:00");const mo=dt.toLocaleString("en-US",{month:"short"});const day=dt.getDate();const [h,m]=t.split(":");const hr=parseInt(h);const ampm=hr>=12?"PM":"AM";const h12=hr%12||12;return `${mo} ${day} at ${h12}:${m} ${ampm}`;}catch{return d+" "+t;}
+  };
+
+  const printAppt=()=>{
+    const apptDate=fmtApptDate(form.date,form.time);
+    const w=window.open("","_blank","width=700,height=850");
+    w.document.write(`<!DOCTYPE html><html><head><title>Appointment — ${lead.name}</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#1a1a1a;padding:40px 48px;max-width:700px;margin:0 auto;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:20px;border-bottom:3px solid #1B4332;margin-bottom:28px}
+      .company{font-size:22px;font-weight:700;color:#1B4332;letter-spacing:-.5px}
+      .company-sub{font-size:11px;color:#666;margin-top:2px}
+      .doc-title{font-size:13px;color:#666;text-align:right}
+      .doc-date{font-size:12px;color:#999;margin-top:2px}
+      .appt-banner{background:#f0fdf4;border:2px solid #1B4332;border-radius:10px;padding:20px 24px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center}
+      .appt-type{font-size:13px;font-weight:600;color:#1B4332;background:#1B433218;padding:4px 12px;border-radius:6px;display:inline-block;margin-bottom:6px}
+      .appt-datetime{font-size:20px;font-weight:700;color:#1B4332}
+      .section{margin-bottom:24px}
+      .section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1B4332;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #e5e5e5}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px}
+      .field-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#999}
+      .field-value{font-size:14px;font-weight:500;margin-top:1px;margin-bottom:8px}
+      .notes-box{background:#fafaf8;border:1px solid #e5e5e5;border-radius:8px;padding:16px;font-size:13px;line-height:1.6;min-height:60px;white-space:pre-wrap}
+      .footer{margin-top:32px;padding-top:16px;border-top:2px solid #eee;display:flex;justify-content:space-between;font-size:10px;color:#aaa}
+      .sig-line{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:48px}
+      .sig-line div{border-top:1px solid #ccc;padding-top:6px;font-size:11px;color:#888}
+      @media print{body{padding:24px 32px}button{display:none!important}}
+      .print-btn{background:#1B4332;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:20px}
+      .print-btn:hover{background:#2D6A4F}
+    </style></head><body>
+      <div class="header">
+        <div><div class="company">L.F. Pease</div><div class="company-sub">Appointment Confirmation</div></div>
+        <div class="doc-title">SCHEDULED APPOINTMENT<div class="doc-date">${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}</div></div>
+      </div>
+      <div class="appt-banner">
+        <div><div class="appt-type">${form.type}</div><div class="appt-datetime">${apptDate}</div></div>
+        <div style="text-align:right;font-size:13px;color:#555">Scheduled by<br><strong>${currentUser?.name||lead.rep||"—"}</strong></div>
+      </div>
+      <div class="section">
+        <div class="section-title">Lead Information</div>
+        <div class="grid">
+          <div><div class="field-label">Company / Name</div><div class="field-value">${lead.name||"—"}</div></div>
+          <div><div class="field-label">Contact Person</div><div class="field-value">${lead.contact||"—"}</div></div>
+          <div><div class="field-label">Phone</div><div class="field-value">${lead.phone||"—"}</div></div>
+          <div><div class="field-label">Email</div><div class="field-value">${lead.email||"—"}</div></div>
+          <div><div class="field-label">Address</div><div class="field-value">${lead.address||"—"}</div></div>
+          <div><div class="field-label">Product</div><div class="field-value">${lead.product||"—"}</div></div>
+          <div><div class="field-label">Source</div><div class="field-value">${lead.source||"—"}</div></div>
+          <div><div class="field-label">Stage</div><div class="field-value">${lead.stage||"—"}</div></div>
+          <div><div class="field-label">Value</div><div class="field-value">$${(lead.value||0).toLocaleString()}</div></div>
+          <div><div class="field-label">Assigned Rep</div><div class="field-value">${lead.rep||"—"}</div></div>
+        </div>
+      </div>
+      ${form.notes?`<div class="section"><div class="section-title">Appointment Notes</div><div class="notes-box">${form.notes}</div></div>`:""}
+      ${lead.notes?`<div class="section"><div class="section-title">Lead Notes</div><div class="notes-box">${lead.notes}</div></div>`:""}
+      <div class="sig-line"><div>Signature</div><div>Date</div></div>
+      <div class="footer"><span>L.F. Pease CRM</span><span>Printed ${new Date().toLocaleString()}</span></div>
+      <div style="text-align:center"><button class="print-btn" onclick="window.print()">🖨 Print</button></div>
+    </body></html>`);
+    w.document.close();
   };
 
   return (
@@ -1627,7 +1687,11 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
           <div style={{padding:"40px 20px",textAlign:"center"}}>
             <div style={{fontSize:48,marginBottom:12}}>✅</div>
             <div className="fw-600" style={{fontSize:18,color:"var(--won)"}}>Appointment Scheduled!</div>
-            <div className="text-sm" style={{marginTop:6,color:"var(--text-mid)"}}>{lead.name}</div>
+            <div className="text-sm" style={{marginTop:6,color:"var(--text-mid)"}}>{lead.name} — {fmtApptDate(form.date,form.time)}</div>
+            <div style={{display:"flex",gap:10,justifyContent:"center",marginTop:20}}>
+              <button onClick={printAppt} className="btn-outline" style={{padding:"10px 20px",fontSize:13}}>🖨 Print Details</button>
+              <button onClick={closeOut} className="btn-primary" style={{padding:"10px 24px",fontSize:13}}>Done</button>
+            </div>
           </div>
         ) : (<>
         <div className="flex-between mb-20">
