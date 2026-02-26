@@ -12,6 +12,8 @@
   <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <style>
     :root {
       --primary:#1B4332; --primary-lt:#2D6A4F; --accent:#D4A017; --accent-lt:#E8C547;
@@ -119,7 +121,6 @@
 </head>
 <body>
 <div id="root"></div>
-<script src="crm-import-data.js"></script>
 <script type="text/babel">
 const {useState,useEffect,useCallback,useMemo,useRef} = React;
 
@@ -128,6 +129,23 @@ const RC = window.Recharts || {};
 const [RLineChart,RLine,RBarChart,RBar,RXAxis,RYAxis,RTooltip,RResponsive,RPieChart,RPie,RCell,RCartGrid,RLegend,RAreaChart,RArea] =
   ["LineChart","Line","BarChart","Bar","XAxis","YAxis","Tooltip","ResponsiveContainer","PieChart","Pie","Cell","CartesianGrid","Legend","AreaChart","Area"]
   .map(n => RC[n] || (() => null));
+
+// ═══════════════════════════
+// ── FIREBASE CONFIG ──
+// ═══════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBqrSPaXdhsg2JuyFPeG8HMtIDD88vxsHM",
+  authDomain: "pease-crm.firebaseapp.com",
+  databaseURL: "https://pease-crm-default-rtdb.firebaseio.com",
+  projectId: "pease-crm",
+  storageBucket: "pease-crm.firebasestorage.app",
+  messagingSenderId: "70117836937",
+  appId: "1:70117836937:web:9132498369360dbd9b5e58"
+};
+firebase.initializeApp(FIREBASE_CONFIG);
+const fbDb = firebase.database();
+const fbLeadsRef = fbDb.ref('leads');
+const fbImportsRef = fbDb.ref('pending_imports');
 
 // ═══════════════════════
 // ── CONSTANTS & CONFIG ──
@@ -196,14 +214,29 @@ const SEED = [
 // ═══════════════════════
 
 const SK = "lfpease-crm-v4b";
-const load = () => { try { return JSON.parse(localStorage.getItem(SK)) } catch { return null } };
-const save = d => { try { localStorage.setItem(SK, JSON.stringify(d)) } catch {} };
+const loadLocal = () => { try { return JSON.parse(localStorage.getItem(SK)) } catch { return null } };
+const saveLocal = d => { try { localStorage.setItem(SK, JSON.stringify(d)) } catch {} };
 const fmt = n => new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(n);
 const now = () => new Date().toISOString().split("T")[0];
-const uid = () => Date.now() + Math.random();
+const uid = () => 'lead_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8);
 const daysAgo = ds => { if(!ds) return 999; return Math.floor((new Date()-new Date(ds))/(864e5)) };
 const isCold = l => !["Won","Lost"].includes(l.stage) && daysAgo(l.updatedAt) >= COLD_DAYS;
 const isRevival = l => l.stage==="Lost" && l.closedAt && daysAgo(l.closedAt)>=60 && !l.revivalDismissed;
+
+// ── Firebase Helpers ──
+function stripFiles(lead) { const {files, ...rest} = lead; return rest; }
+function leadsToObj(leads) { const obj = {}; leads.forEach(l => { obj[String(l.id)] = stripFiles(l); }); return obj; }
+function objToLeads(obj) {
+  if(!obj) return null;
+  return Object.values(obj).map(l => {
+    // Firebase converts sparse arrays to objects — normalize activity back to array
+    if(l.activity && !Array.isArray(l.activity)) l.activity = Object.values(l.activity);
+    return l;
+  });
+}
+function fbWriteLead(lead) { try { fbLeadsRef.child(String(lead.id)).set(stripFiles(lead)); } catch(e) { console.warn('Firebase write failed:', e); } }
+function fbDeleteLead(id) { try { fbLeadsRef.child(String(id)).remove(); } catch(e) { console.warn('Firebase delete failed:', e); } }
+function fbWriteAll(leads) { try { fbLeadsRef.set(leadsToObj(leads)); } catch(e) { console.warn('Firebase write-all failed:', e); } }
 const tplKey = l => l.stage==="Lost"?"winback":l.stage==="Quote Sent"?"quote":l.stage==="New Lead"?"initial":"revival";
 
 // ═══════════════════════════
@@ -1196,11 +1229,9 @@ function mapRep(raw){if(!raw)return"Unassigned";const r=raw.trim().toUpperCase()
 function ImportQuoteModal({onClose,addLead,leads,initialData}) {
   const [err,setErr]=useState("");
   const [dupes,setDupes]=useState([]);
-  const [loading,setLoading]=useState(false);
-  const [timedOut,setTimedOut]=useState(false);
+  const [waiting,setWaiting]=useState(false);
   const fileRef=useRef(null);
-  const pollRef=useRef(null);
-  const timeoutRef=useRef(null);
+  const waitTimer=useRef(null);
 
   const buildForm = (d) => ({
     name: d.name || "",
@@ -1219,6 +1250,26 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
 
   const [form,setForm]=useState(() => initialData ? buildForm(initialData) : null);
 
+  // React to initialData arriving via Firebase while modal is already open
+  useEffect(() => {
+    if(initialData && !form) {
+      setForm(buildForm(initialData));
+      setWaiting(false);
+      clearTimeout(waitTimer.current);
+    }
+  }, [initialData]);
+
+  // If no initialData, try protocol handler to auto-read from Access
+  useEffect(() => {
+    if(initialData || form) return;
+    setWaiting(true);
+    // Try protocol handler (works on machines where it's registered, fails silently elsewhere)
+    try { window.location.href = "lfpcrm:import"; } catch(e) {}
+    // After a few seconds, show manual options as fallback
+    waitTimer.current = setTimeout(() => setWaiting(false), 8000);
+    return () => clearTimeout(waitTimer.current);
+  }, []);
+
   // Check for duplicates when form loads
   useEffect(() => {
     if(!form) return;
@@ -1229,73 +1280,32 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     setDupes(dl);
   }, [form?.contact, form?.phone]);
 
-  // If no initialData, trigger protocol handler to read Access and poll for result
-  useEffect(() => {
-    if(initialData || form) return;
-    setLoading(true);
-    const startTime = Date.now();
-
-    // Snapshot old data so we can detect when the PS script writes new data
-    const oldPkg = window.__CRM_IMPORT_DATA;
-    const oldFingerprint = JSON.stringify(oldPkg?.data || null);
-    const fallbackData = oldPkg?.data ? {...oldPkg.data} : null;
-
-    // Trigger the protocol handler (runs PS silently in background)
-    try { window.location.href = "lfpcrm:import"; } catch(e) {}
-
-    // Poll for the data file to be written
-    let lastLoaded = null;
-    pollRef.current = setInterval(() => {
-      window.__CRM_IMPORT_DATA = null;
-      const old = document.getElementById("crm-poll-script");
-      if(old) old.remove();
-      const s = document.createElement("script");
-      s.id = "crm-poll-script";
-      s.src = "crm-import-data.js?t=" + Date.now();
-      s.onload = () => {
-        const pkg = window.__CRM_IMPORT_DATA;
-        if(pkg && pkg.data) {
-          lastLoaded = pkg.data;
-          const newFingerprint = JSON.stringify(pkg.data);
-          // Accept if data content changed OR if ts is a proper fixed timestamp written after modal opened
-          if(newFingerprint !== oldFingerprint || (typeof pkg.ts === "number" && pkg.ts > startTime - 3000 && pkg.ts < startTime + 120000)) {
-            clearInterval(pollRef.current);
-            clearTimeout(timeoutRef.current);
-            setForm(buildForm(pkg.data));
-            setLoading(false);
-            window.__CRM_IMPORT_DATA = null;
-          }
-        }
-      };
-      s.onerror = () => {};
-      document.head.appendChild(s);
-    }, 1000);
-
-    timeoutRef.current = setTimeout(() => {
-      clearInterval(pollRef.current);
-      setLoading(false);
-      // Fallback: show whatever data we have (last polled or original snapshot)
-      const best = lastLoaded || fallbackData;
-      if(best) {
-        setForm(buildForm(best));
-        window.__CRM_IMPORT_DATA = null;
-      } else {
-        setTimedOut(true);
-      }
-    }, 12000);
-
-    return () => { clearInterval(pollRef.current); clearTimeout(timeoutRef.current); };
-  }, []);
-
   const handleFile = (e) => {
     const file = e.target.files?.[0] || (e.dataTransfer?.files?.[0]);
     if(!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      try { setForm(buildForm(JSON.parse(ev.target.result))); setErr(""); setTimedOut(false); }
+      try { setForm(buildForm(JSON.parse(ev.target.result))); setErr(""); setWaiting(false); clearTimeout(waitTimer.current); }
       catch(ex) { setErr("Could not read that file. Make sure you exported from Access first."); }
     };
     reader.readAsText(file);
+  };
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const data = JSON.parse(text);
+      if(data.name || data.contact) {
+        setForm(buildForm(data));
+        setErr("");
+        setWaiting(false);
+        clearTimeout(waitTimer.current);
+      } else {
+        setErr("Clipboard doesn't contain quote data. Run 'Export Quote to CRM' from Access first.");
+      }
+    } catch(ex) {
+      setErr("Could not read clipboard. Your browser may have blocked it — try clicking 'Allow' if prompted.");
+    }
   };
 
   const submit = () => {
@@ -1316,21 +1326,18 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}>
       <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>Import Quote from Access</h3>
 
-      {loading && (<div style={{textAlign:"center",padding:"32px 0"}}>
+      {waiting && !form && (<div style={{textAlign:"center",padding:"32px 0"}}>
         <div style={{fontSize:28,marginBottom:12,animation:"coldPulse 1.5s ease-in-out infinite"}}>Reading from Access...</div>
-        <div className="text-sm">Getting the current quote. This takes a couple seconds.</div>
+        <div className="text-sm" style={{marginBottom:16}}>Getting the current quote. This takes a couple seconds.</div>
+        <button onClick={handlePaste} className="btn-action" style={{background:"var(--accent)",color:"var(--primary)",padding:"10px 24px",fontSize:13,borderRadius:8}}>Paste from Clipboard</button>
+        <div className="text-xs" style={{marginTop:8}}>Already ran the export? Click above to paste.</div>
       </div>)}
 
-      {!form && !loading && (<div>
-        {timedOut && (
-          <div className="alert mb-16" style={{background:"rgba(155,44,44,.08)",border:"1px solid rgba(155,44,44,.25)"}}>
-            <span className="alert-icon">!</span>
-            <div><div className="fw-600" style={{fontSize:13,color:"var(--lost)"}}>Could not read from Access</div>
-            <div className="text-sm">Make sure a quote is open in Access. If this is your first time, run <strong>Setup-CRM-Import.bat</strong> from C:\QuoteDB first.</div></div>
-          </div>
-        )}
+      {!form && !waiting && (<div>
         <div style={{textAlign:"center",padding:"12px 0 20px"}}>
-          <div style={{fontSize:12,color:"var(--text-lt)",marginBottom:16}}>You can also load a previously exported file:</div>
+          <div className="text-sm" style={{marginBottom:16}}>Use one of the options below, or run "Export Quote to CRM" from Access — it will appear here automatically.</div>
+          <button onClick={handlePaste} className="btn-primary" style={{padding:"14px 32px",fontSize:14,width:"100%",marginBottom:16,borderRadius:10}}>Paste from Clipboard</button>
+          <div style={{fontSize:12,color:"var(--text-lt)",marginBottom:10}}>Or load a previously exported file:</div>
           <div className="dropzone" onClick={()=>fileRef.current?.click()} onDrop={e=>{e.preventDefault();handleFile(e)}} onDragOver={e=>e.preventDefault()}>
             <input ref={fileRef} type="file" accept=".json" style={{display:"none"}} onChange={handleFile}/>
             <div style={{fontSize:24,marginBottom:4}}>📂</div>
@@ -1373,7 +1380,7 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
 // ═══════════════════
 
 function App() {
-  const [leads,setLeads]=useState(()=>load()||SEED);
+  const [leads,setLeads]=useState(()=>loadLocal()||SEED);
   const [view,setView]=useState("playbook");
   const [selected,setSelected]=useState(null);
   const [showAdd,setShowAdd]=useState(false);
@@ -1384,6 +1391,8 @@ function App() {
   const [fStage,setFStage]=useState("All");
   const [search,setSearch]=useState("");
   const [mapStage,setMapStage]=useState("All");
+  const [fbConnected,setFbConnected]=useState(false);
+  const fromFirebase=useRef(false);
 
   // ── User login state ──
   const [currentUser,setCurrentUser]=useState(()=>{try{return JSON.parse(localStorage.getItem(USER_SK))}catch{return null}});
@@ -1391,22 +1400,65 @@ function App() {
   const handleLogout=useCallback(()=>{setCurrentUser(null);try{localStorage.removeItem(USER_SK)}catch{}},[]);
   const isAdmin=currentUser?.role==="admin";
 
-  useEffect(()=>{save(leads)},[leads]);
-
-  // Auto-detect import data from Export script (loaded via crm-import-data.js)
-  // Only auto-open if the ts is a proper fixed timestamp (not 0, and within 5 min)
+  // ── Save to localStorage + push to Firebase ──
   useEffect(()=>{
-    try {
-      const pkg = window.__CRM_IMPORT_DATA;
-      if(pkg && pkg.data && typeof pkg.ts === "number" && pkg.ts > 1000000000000) {
-        const lastTs = Number(localStorage.getItem('lfpease-last-import-ts')) || 0;
-        if(pkg.ts > lastTs && (Date.now() - pkg.ts) < 300000) {
-          setImportData(pkg.data);
-          setShowImport(true);
-        }
-        window.__CRM_IMPORT_DATA = null;
+    saveLocal(leads);
+    if(fromFirebase.current){
+      fromFirebase.current=false;
+      return; // Data came FROM Firebase — don't echo it back
+    }
+    // Local change — push to Firebase
+    fbWriteAll(leads);
+  },[leads]);
+
+  // ── Firebase: connection status ──
+  useEffect(()=>{
+    const connRef=fbDb.ref('.info/connected');
+    const handler=snap=>setFbConnected(!!snap.val());
+    connRef.on('value',handler);
+    return()=>connRef.off('value',handler);
+  },[]);
+
+  // ── Firebase: real-time sync + initial migration ──
+  useEffect(()=>{
+    // One-time check: if Firebase is empty, push our local data up
+    fbLeadsRef.once('value').then(snap=>{
+      if(!snap.val()){
+        const local=loadLocal()||SEED;
+        fbWriteAll(local);
       }
-    } catch(e) {}
+    });
+
+    // Real-time listener — receive changes from other clients
+    const handler=snap=>{
+      const fbLeads=objToLeads(snap.val());
+      if(fbLeads&&fbLeads.length>0){
+        fromFirebase.current=true;
+        setLeads(prev=>{
+          // Merge files from local leads (base64 files stay localStorage-only)
+          const fileMap={};
+          prev.forEach(l=>{if(l.files?.length)fileMap[String(l.id)]=l.files;});
+          return fbLeads.map(l=>({...l,files:fileMap[String(l.id)]||l.files||[]}));
+        });
+      }
+    };
+    fbLeadsRef.on('value',handler);
+    return()=>fbLeadsRef.off('value',handler);
+  },[]);
+
+  // ── Firebase: pending_imports listener (auto-detect Access exports) ──
+  useEffect(()=>{
+    const handler=snap=>{
+      const data=snap.val();
+      if(data){
+        setImportData(data);
+        setShowImport(true);
+        // Remove the import entry after reading it
+        snap.ref.remove();
+      }
+    };
+    fbImportsRef.on('child_added',handler);
+    return()=>fbImportsRef.off('child_added',handler);
   },[]);
 
   // ── Per-user lead filtering ──
@@ -1423,13 +1475,13 @@ function App() {
   const stats=useStats(myLeads);
 
   const update=useCallback((id,u)=>{setLeads(p=>p.map(l=>{if(l.id!==id)return l;const r={...l,...u,updatedAt:now()};if(u.stage==="Won"||u.stage==="Lost")r.closedAt=now();return r}))},[]);
-  const add=useCallback(l=>{const by=currentUser?currentUser.name:l.rep;const note=l._importNote||"Lead created";const{_importNote,...rest}=l;setLeads(p=>[...p,{...rest,id:uid(),createdAt:now(),updatedAt:now(),activity:[{type:"note",text:note,date:now(),by}]}]);setShowAdd(false);setShowImport(false);setImportData(null);if(rest.stage==="New Lead")setView("newleads");try{localStorage.setItem('lfpease-last-import-ts',String(Date.now()))}catch(e){}},[currentUser]);
+  const add=useCallback(l=>{const by=currentUser?currentUser.name:l.rep;const note=l._importNote||"Lead created";const{_importNote,...rest}=l;setLeads(p=>[...p,{...rest,id:uid(),createdAt:now(),updatedAt:now(),activity:[{type:"note",text:note,date:now(),by}]}]);setShowAdd(false);setShowImport(false);setImportData(null);if(rest.stage==="New Lead")setView("newleads")},[currentUser]);
   const del=useCallback(id=>{setLeads(p=>p.filter(l=>l.id!==id));setSelected(null)},[]);
   const log=useCallback((id,entry)=>{const stamped={...entry,by:currentUser?currentUser.name:entry.by};setLeads(p=>p.map(l=>l.id!==id?l:{...l,activity:[...(l.activity||[]),stamped],updatedAt:now()}))},[currentUser]);
   const addFile=useCallback((id,file)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:[...(l.files||[]),file]}))},[]);
   const delFile=useCallback((id,fileId)=>{setLeads(p=>p.map(l=>l.id!==id?l:{...l,files:(l.files||[]).filter(f=>f.id!==fileId)}))},[]);
 
-  // ── Atomic assign for New Leads (fixes the bug) ──
+  // ── Atomic assign for New Leads ──
   const assign=useCallback((id,rep)=>{
     const by=currentUser?currentUser.name:rep;
     setLeads(p=>p.map(l=>{
@@ -1462,6 +1514,10 @@ function App() {
           </button>
         ))}</nav>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:4,marginRight:4}} title={fbConnected?"Connected to Firebase — syncing in real-time":"Offline — changes saved locally"}>
+            <div style={{width:8,height:8,borderRadius:"50%",background:fbConnected?"#4ade80":"#f87171",boxShadow:fbConnected?"0 0 6px #4ade80":"none"}}/>
+            <span style={{fontSize:10,color:"rgba(255,255,255,.5)"}}>{fbConnected?"Live":"Offline"}</span>
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:6,color:"rgba(255,255,255,.8)",fontSize:12}}>
             <span>{isAdmin?"👑":"📋"}</span>
             <span className="fw-600">{currentUser.name}</span>
