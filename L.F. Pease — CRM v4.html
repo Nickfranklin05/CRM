@@ -1280,12 +1280,11 @@ const FormField=({label,k,type="text",opts,form,setForm})=>(
 function AddModal({onClose,addLead}) {
   const [form,setForm]=useState({name:"",contact:"",phone:"",email:"",address:"",product:PRODUCTS[0],source:SOURCES[0],rep:REPS[1],stage:"New Lead",value:0,notes:"",referredBy:""});
   const submit=()=>{if(!form.name.trim()||!form.contact.trim())return;addLead({...form})};
-  const F=({label,k,type,opts})=>(<FormField label={label} k={k} type={type} opts={opts} form={form} setForm={setForm}/>);
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:560}}>
       <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>New Lead</h3>
-      <div className="grid-2" style={{gap:"0 20px"}}><F label="Lead Name *" k="name"/><F label="Contact Name *" k="contact"/><F label="Phone" k="phone"/><F label="Email" k="email"/><F label="Address" k="address"/><F label="Value" k="value" type="number"/><F label="Product" k="product" opts={PRODUCTS}/><F label="Source" k="source" opts={SOURCES}/><F label="Rep" k="rep" opts={REPS}/><F label="Stage" k="stage" opts={ACTIVE_STAGES}/><F label="Referred By" k="referredBy"/></div>
-      <F label="Notes" k="notes" type="textarea"/>
+      <div className="grid-2" style={{gap:"0 20px"}}><FormField label="Lead Name *" k="name" form={form} setForm={setForm}/><FormField label="Contact Name *" k="contact" form={form} setForm={setForm}/><FormField label="Phone" k="phone" form={form} setForm={setForm}/><FormField label="Email" k="email" form={form} setForm={setForm}/><FormField label="Address" k="address" form={form} setForm={setForm}/><FormField label="Value" k="value" type="number" form={form} setForm={setForm}/><FormField label="Product" k="product" opts={PRODUCTS} form={form} setForm={setForm}/><FormField label="Source" k="source" opts={SOURCES} form={form} setForm={setForm}/><FormField label="Rep" k="rep" opts={REPS} form={form} setForm={setForm}/><FormField label="Stage" k="stage" opts={ACTIVE_STAGES} form={form} setForm={setForm}/><FormField label="Referred By" k="referredBy" form={form} setForm={setForm}/></div>
+      <FormField label="Notes" k="notes" type="textarea" form={form} setForm={setForm}/>
       <div style={{display:"flex",gap:8,marginTop:16}}><button onClick={submit} className="btn-primary" style={{flex:1,fontSize:14}}>Add Lead</button><button onClick={onClose} className="btn-outline">Cancel</button></div>
     </div></div>
   );
@@ -1528,8 +1527,6 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     onClose();
   };
 
-  const F=({label,k,type,opts})=>(<FormField label={label} k={k} type={type} opts={opts} form={form} setForm={setForm}/>);
-
   return (
     <div className="modal-overlay" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:600}}>
       <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>Import Quote from Access</h3>
@@ -1566,14 +1563,14 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
         )}
         {err && <div style={{color:"var(--lost)",fontSize:12,marginBottom:12}}>{err}</div>}
         <div className="grid-2" style={{gap:"0 20px"}}>
-          <F label="Lead Name *" k="name"/><F label="Contact Name *" k="contact"/>
-          <F label="Phone" k="phone"/><F label="Email" k="email"/>
-          <F label="Address" k="address"/><F label="Value" k="value" type="number"/>
-          <F label="Product" k="product" opts={PRODUCTS}/><F label="Source" k="source" opts={SOURCES}/>
-          <F label="Rep" k="rep" opts={REPS}/><F label="Stage" k="stage" opts={ACTIVE_STAGES}/>
-          <F label="Referred By" k="referredBy"/>
+          <FormField label="Lead Name *" k="name" form={form} setForm={setForm}/><FormField label="Contact Name *" k="contact" form={form} setForm={setForm}/>
+          <FormField label="Phone" k="phone" form={form} setForm={setForm}/><FormField label="Email" k="email" form={form} setForm={setForm}/>
+          <FormField label="Address" k="address" form={form} setForm={setForm}/><FormField label="Value" k="value" type="number" form={form} setForm={setForm}/>
+          <FormField label="Product" k="product" opts={PRODUCTS} form={form} setForm={setForm}/><FormField label="Source" k="source" opts={SOURCES} form={form} setForm={setForm}/>
+          <FormField label="Rep" k="rep" opts={REPS} form={form} setForm={setForm}/><FormField label="Stage" k="stage" opts={ACTIVE_STAGES} form={form} setForm={setForm}/>
+          <FormField label="Referred By" k="referredBy" form={form} setForm={setForm}/>
         </div>
-        <F label="Notes" k="notes" type="textarea"/>
+        <FormField label="Notes" k="notes" type="textarea" form={form} setForm={setForm}/>
         <div style={{display:"flex",gap:8,marginTop:16}}>
           <button onClick={submit} className="btn-primary" style={{flex:1,fontSize:14}}>Import Lead</button>
           <button onClick={onClose} className="btn-outline">Cancel</button>
