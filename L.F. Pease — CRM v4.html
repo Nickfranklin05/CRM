@@ -604,7 +604,7 @@ function useStats(leads) {
 function PlaybookView({leads,setSelected,logActivity,isAdmin,archive,currentUser,setScheduleLeadId}) {
   const cold = leads.filter(isCold).sort((a,b)=>b.value-a.value);
   const revival = leads.filter(isRevival).sort((a,b)=>b.value-a.value);
-  const fresh = leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).sort((a,b)=>b.value-a.value);
+  const fresh = leads.filter(l=>l.stage==="New Lead").sort((a,b)=>b.value-a.value);
   const quotes = leads.filter(l=>l.stage==="Quote Sent").sort((a,b)=>daysAgo(b.updatedAt)-daysAgo(a.updatedAt));
   const nego = leads.filter(l=>l.stage==="Negotiating").sort((a,b)=>b.value-a.value);
   const total = cold.length+revival.length+fresh.length+quotes.length+nego.length;
@@ -2225,7 +2225,7 @@ function App() {
     const by=currentUser?currentUser.name:rep;
     setLeads(p=>p.map(l=>{
       if(l.id!==id)return l;
-      return {...l,rep,stage:"Contacted",updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:`Assigned to ${rep} and moved to Contacted`,date:now(),by}]};
+      return {...l,rep,updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:`Assigned to ${rep}`,date:now(),by}]};
     }));
   },[currentUser]);
 
