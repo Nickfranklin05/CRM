@@ -1601,6 +1601,8 @@ function AddModal({onClose,addLead}) {
 function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUser}) {
   if(!lead) return null;
   const [form,setForm]=useState({date:"",time:"10:00",type:APPT_TYPES[0],notes:""});
+  const [saved,setSaved]=useState(false);
+  const [closing,setClosing]=useState(false);
   const appts = lead.appointments||[];
 
   const submit=()=>{
@@ -1610,7 +1612,8 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
       date:form.date, time:form.time, type:form.type, notes:form.notes,
       by:currentUser?.name||lead.rep, createdAt:now()
     });
-    setForm({date:"",time:"10:00",type:APPT_TYPES[0],notes:""});
+    setSaved(true);
+    setTimeout(()=>{setClosing(true);setTimeout(()=>onClose(),350)},900);
   };
 
   const fmtApptDate=(d,t)=>{
@@ -1618,8 +1621,15 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:480}}>
+    <div className="modal-overlay" onClick={onClose} style={{opacity:closing?0:1,transition:"opacity .35s ease"}}>
+      <div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:480,transform:closing?"scale(.95)":"scale(1)",opacity:closing?0:1,transition:"all .35s ease"}}>
+        {saved ? (
+          <div style={{padding:"40px 20px",textAlign:"center"}}>
+            <div style={{fontSize:48,marginBottom:12}}>✅</div>
+            <div className="fw-600" style={{fontSize:18,color:"var(--won)"}}>Appointment Scheduled!</div>
+            <div className="text-sm" style={{marginTop:6,color:"var(--text-mid)"}}>{lead.name}</div>
+          </div>
+        ) : (<>
         <div className="flex-between mb-20">
           <div>
             <h3 style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600}}>Schedule Appointment</h3>
@@ -1648,7 +1658,7 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
           <div className="label" style={{marginBottom:4}}>Notes</div>
           <textarea className="input" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Optional notes..." style={{resize:"vertical",fontFamily:"var(--font)"}}/>
         </div>
-        <button onClick={submit} className="btn-primary" style={{width:"100%",marginBottom:16}} disabled={!form.date}>📅 Schedule</button>
+        <button onClick={submit} className="btn-primary" style={{width:"100%",marginBottom:16}} disabled={!form.date}>Save Appointment</button>
 
         {appts.length>0 && (
           <div style={{borderTop:"1px solid var(--border)",paddingTop:16}}>
@@ -1669,6 +1679,7 @@ function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUse
             </div>
           </div>
         )}
+        </>)}
       </div>
     </div>
   );
