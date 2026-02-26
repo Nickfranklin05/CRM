@@ -1,14 +1,14 @@
 ﻿window.__CRM_IMPORT_DATA = {data: {
-    "name":  "CVS New Awnings",
-    "contact":  "CVS",
-    "phone":  "401-438-3387",
+    "name":  "Guimelli New Awnings",
+    "contact":  "Sandra \u0026 Peter Guimelli",
+    "phone":  "401-245-0579",
     "email":  "",
-    "address":  "4a, New Bedford, MA 0",
+    "address":  "8 Rollingwood Ct, Warren, RI 2885",
     "product":  "Other",
-    "source":  "Repeat Customer",
+    "source":  "Other",
     "rep":  "Unassigned",
-    "stage":  "Contacted",
-    "value":  0,
+    "stage":  "Quote Sent",
+    "value":  1575,
     "notes":  "",
     "referredBy":  ""
-}, ts: 1772054088295};
+}, ts: 1772120997276};
