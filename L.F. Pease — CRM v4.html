@@ -341,8 +341,8 @@ const daysAgo = ds => { if(!ds) return 999; return Math.floor((new Date()-new Da
 const isCold = l => !l.archived && !["Won","Lost"].includes(l.stage) && daysAgo(l.updatedAt) >= COLD_DAYS;
 const isRevival = l => !l.archived && l.stage==="Lost" && l.closedAt && daysAgo(l.closedAt)>=60 && !l.revivalDismissed;
 const isArchived = l => !!l.archived;
-const canArchive = (l, cu, adm) => !l.archived && (adm || l.rep === cu?.name);
-const canRestore = (l, cu, adm) => !!l.archived && (adm || l.rep === cu?.name);
+const canArchive = (l) => !l.archived;
+const canRestore = (l) => !!l.archived;
 
 // ── Firebase Helpers ──
 function stripFiles(lead) { const {files, ...rest} = lead; return rest; }
@@ -629,7 +629,7 @@ function PlaybookView({leads,setSelected,logActivity,isAdmin,archive,currentUser
                 <span className="med-num text-primary">{fmt(l.value)}</span>
                 <Outreach lead={l} tpl={forceTpl||tplKey(l)} onLog={logActivity}/>
                 <button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>
-                {canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}
+                {canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}
               </div>
             </div>
           ))}
@@ -845,7 +845,7 @@ function PipeView({leads,update,setSelected,filterRep,setFilterRep,isAdmin,archi
               <div className="flex-col gap-8" style={{padding:"8px 0",minHeight:120}}>
                 {sl.map(l => (
                   <div key={l.id} onClick={()=>setSelected(l.id)} className="card" style={{padding:"12px 14px",cursor:"pointer",borderLeft:`3px solid ${isCold(l)?"var(--cold)":STAGE_HEX[stage]}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}><div className="fw-600" style={{fontSize:13,marginBottom:4}}>{l.name}{isCold(l)&&" 🥶"}</div><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}><div className="fw-600" style={{fontSize:13,marginBottom:4}}>{l.name}{isCold(l)&&" 🥶"}</div><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></div>
                     <div className="text-xs" style={{marginBottom:6}}>{l.product}</div>
                     <div className="flex-between"><span className="fw-700 text-primary" style={{fontSize:13}}>{fmt(l.value)}</span><span className="text-xs">{l.rep}</span></div>
                     {!closed && <div style={{display:"flex",gap:4,marginTop:8}}>
@@ -916,7 +916,7 @@ function ColdView({leads,setSelected,logActivity,archive,currentUser,isAdmin,set
         <div key={l.id} onClick={()=>setSelected(l.id)} className="card cold-pulse" style={{padding:20,cursor:"pointer",borderLeft:"4px solid var(--cold)"}}>
           <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><ColdTag days={d}/></div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><Badge stage={l.stage}/><span className="text-xs">{l.product} · {l.rep}</span></div>
-          <div className="flex-between"><Outreach lead={l} tpl={tplKey(l)} onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
+          <div className="flex-between"><Outreach lead={l} tpl={tplKey(l)} onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
         </div>
       )})}</div>
     </div>
@@ -953,12 +953,12 @@ function RevivalView({leads,setSelected,update,logActivity,archive,currentUser,i
           <div key={l.id} onClick={()=>setSelected(l.id)} className={d>=90?"revival-glow":"card"} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,cursor:"pointer",borderLeft:`4px solid ${d>=90?"var(--cold)":"var(--accent)"}`}}>
             <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><span className="text-xs fw-600" style={{color:d>=90?"var(--cold)":"var(--accent)"}}>{d} days since lost</span></div></div>
             <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><LossTag reason={l.lossReason}/><span className="text-xs">{l.product} · {l.rep}</span></div>
-            <div className="flex-between"><Outreach lead={l} tpl="winback" onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>reopen(e,l)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>♻️ Re-open</button><button onClick={e=>{e.stopPropagation();update(l.id,{revivalDismissed:true})}} className="btn-sm">Dismiss</button><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
+            <div className="flex-between"><Outreach lead={l} tpl="winback" onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>reopen(e,l)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>♻️ Re-open</button><button onClick={e=>{e.stopPropagation();update(l.id,{revivalDismissed:true})}} className="btn-sm">Dismiss</button><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
           </div>
         )})}</div>
       </div>}
       <div className="heading-sm mb-12">All Lost Leads</div>
-      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr><th>Lead</th><th>Contact</th><th>Product</th><th>Value</th><th>Reason</th><th>Lost</th><th>Days</th><th style={{cursor:"default"}}></th></tr></thead><tbody>{ll.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isRevival(l)?"rgba(212,160,23,.04)":"transparent"}}><td className="fw-600">{l.name}{isRevival(l)&&" 🔄"}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="fw-600 text-primary">{fmt(l.value)}</td><td><LossTag reason={l.lossReason}/></td><td className="text-xs">{l.closedAt}</td><td className="fw-600" style={{color:daysAgo(l.closedAt)>=90?"var(--cold)":daysAgo(l.closedAt)>=60?"var(--accent)":"var(--text-lt)"}}>{daysAgo(l.closedAt)}d</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
+      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr><th>Lead</th><th>Contact</th><th>Product</th><th>Value</th><th>Reason</th><th>Lost</th><th>Days</th><th style={{cursor:"default"}}></th></tr></thead><tbody>{ll.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isRevival(l)?"rgba(212,160,23,.04)":"transparent"}}><td className="fw-600">{l.name}{isRevival(l)&&" 🔄"}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="fw-600 text-primary">{fmt(l.value)}</td><td><LossTag reason={l.lossReason}/></td><td className="text-xs">{l.closedAt}</td><td className="fw-600" style={{color:daysAgo(l.closedAt)>=90?"var(--cold)":daysAgo(l.closedAt)>=60?"var(--accent)":"var(--text-lt)"}}>{daysAgo(l.closedAt)}d</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -981,7 +981,7 @@ function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFSt
         </div>
       </div>
       <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr>{[["name","Lead"],["contact","Contact"],["product","Product"],["source","Source"],["rep","Rep"],["stage","Stage"],["value","Value"],["updatedAt","Updated"]].map(([k,l])=><th key={k} onClick={()=>toggle(k)}>{l} {sk===k?(sd>0?"↑":"↓"):""}</th>)}<th style={{cursor:"default"}}></th></tr></thead>
-      <tbody>{sorted.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isCold(l)?"rgba(220,38,38,.02)":"transparent"}}><td className="fw-600">{l.name}{isCold(l)&&" 🥶"}{l.files?.length>0&&<span title={`${l.files.length} file${l.files.length>1?"s":""}`} style={{marginLeft:4,fontSize:10}}>📎{l.files.length}</span>}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="text-sm">{l.source}</td><td className="text-sm">{l.rep}</td><td><Badge stage={l.stage}/></td><td className="fw-600 text-primary">{fmt(l.value)}</td><td className="text-xs">{l.updatedAt}</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
+      <tbody>{sorted.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isCold(l)?"rgba(220,38,38,.02)":"transparent"}}><td className="fw-600">{l.name}{isCold(l)&&" 🥶"}{l.files?.length>0&&<span title={`${l.files.length} file${l.files.length>1?"s":""}`} style={{marginLeft:4,fontSize:10}}>📎{l.files.length}</span>}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="text-sm">{l.source}</td><td className="text-sm">{l.rep}</td><td><Badge stage={l.stage}/></td><td className="fw-600 text-primary">{fmt(l.value)}</td><td className="text-xs">{l.updatedAt}</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -1040,7 +1040,7 @@ function ArchiveView({leads,restore,setSelected,currentUser,isAdmin,setScheduleL
             <td><Badge stage={l.stage}/></td>
             <td className="fw-600 text-primary">{fmt(l.value)}</td>
             <td className="text-xs">{l.updatedAt}</td>
-            <td><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={(e)=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canRestore(l,currentUser,isAdmin)&&<button onClick={()=>restore(l.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"4px 12px"}}>Restore</button>}</div></td>
+            <td><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={(e)=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canRestore(l)&&<button onClick={()=>restore(l.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"4px 12px"}}>Restore</button>}</div></td>
           </tr>)}</tbody>
         </table>
       </div>
@@ -1558,8 +1558,8 @@ function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,
             {!lead.archived&&!["Won","Lost"].includes(lead.stage)&&<><button onClick={()=>update(lead.id,{stage:"Won"})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>Won</button><button onClick={()=>update(lead.id,{stage:"Lost"})} className="btn-action" style={{background:"rgba(155,44,44,.08)",color:"var(--lost)",padding:"10px 16px",fontSize:13}}>Lost</button></>}
             {!lead.archived&&lead.stage==="Lost"&&<button onClick={()=>update(lead.id,{stage:"Contacted",closedAt:null,revivalDismissed:false})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Re-open</button>}
             <button onClick={()=>setScheduleLeadId(lead.id)} title="Schedule" className="icon-btn" style={{fontSize:18}}>📅</button>
-            {canArchive(lead,currentUser,isAdmin)&&<button onClick={()=>archive(lead.id)} title="Archive" className="icon-btn" style={{fontSize:18}}>📦</button>}
-            {canRestore(lead,currentUser,isAdmin)&&<button onClick={()=>restore(lead.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Restore</button>}
+            {canArchive(lead)&&<button onClick={()=>archive(lead.id)} title="Archive" className="icon-btn" style={{fontSize:18}}>📦</button>}
+            {canRestore(lead)&&<button onClick={()=>restore(lead.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Restore</button>}
             {confirmDel?<button onClick={()=>del(lead.id)} className="btn-action" style={{background:"var(--lost)",color:"#fff",padding:"10px 16px",fontSize:13}}>Confirm Delete</button>:<button onClick={()=>setConfirmDel(true)} className="btn-sm" style={{color:"var(--lost)",borderColor:"rgba(155,44,44,.3)"}}>🗑</button>}
           </>)}
         </div>
@@ -1705,7 +1705,7 @@ function NewLeadsView({leads,assign,setSelected,archive,currentUser,isAdmin,setS
         </div>
         <div className="text-xs" style={{width:60,textAlign:"right",flexShrink:0}}>{daysAgo(lead.createdAt)===0?"Today":daysAgo(lead.createdAt)+"d ago"}</div>
         <button onClick={e=>{e.stopPropagation();setScheduleLeadId(lead.id)}} title="Schedule" className="icon-btn" style={{fontSize:13,flexShrink:0}}>📅</button>
-        {canArchive(lead,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(lead.id)}} title="Archive" className="icon-btn" style={{fontSize:13,flexShrink:0}}>📦</button>}
+        {canArchive(lead)&&<button onClick={e=>{e.stopPropagation();archive(lead.id)}} title="Archive" className="icon-btn" style={{fontSize:13,flexShrink:0}}>📦</button>}
       </div>
     </div>
   );
@@ -2104,11 +2104,8 @@ function App() {
   },[leads,currentUser,isAdmin]);
 
   const myArchivedLeads=useMemo(()=>{
-    const archived=leads.filter(l=>l.archived===true);
-    if(!currentUser)return archived;
-    if(isAdmin)return archived;
-    return archived.filter(l=>l.rep===currentUser.name);
-  },[leads,currentUser,isAdmin]);
+    return leads.filter(l=>l.archived===true);
+  },[leads]);
   const archiveN=myArchivedLeads.length;
 
   const allAppointments=useMemo(()=>{
