@@ -274,6 +274,8 @@ const SOURCES = ["Referral","Phone/Inbound","Repeat Customer","Other"];
 const REPS = ["Unassigned","Larry","John","Nick"];
 const COLD_DAYS = 14;
 const LOSS_REASONS = ["Price/Budget","Went with Competitor","Timing/Not Ready","Ghosted/No Response","Changed Mind","Other"];
+const APPT_TYPES = ["Site Visit","Follow-up Call","Measure","Install","Consultation","Other"];
+const APPT_COLORS = {"Site Visit":"#2563EB","Follow-up Call":"#7C3AED","Measure":"#D97706","Install":"#2D6A4F","Consultation":"#0891B2","Other":"#6B7280"};
 
 const USERS = [
   {name:"Michelle", role:"admin", label:"Michelle (Admin)"},
@@ -350,6 +352,7 @@ function objToLeads(obj) {
   return Object.values(obj).map(l => {
     // Firebase converts sparse arrays to objects — normalize activity back to array
     if(l.activity && !Array.isArray(l.activity)) l.activity = Object.values(l.activity);
+    if(l.appointments && !Array.isArray(l.appointments)) l.appointments = Object.values(l.appointments);
     return l;
   });
 }
@@ -598,7 +601,7 @@ function useStats(leads) {
 // ── VIEW: TODAY'S PLAYBOOK ──
 // ══════════════════════════
 
-function PlaybookView({leads,setSelected,logActivity,isAdmin,archive,currentUser}) {
+function PlaybookView({leads,setSelected,logActivity,isAdmin,archive,currentUser,setScheduleLeadId}) {
   const cold = leads.filter(isCold).sort((a,b)=>b.value-a.value);
   const revival = leads.filter(isRevival).sort((a,b)=>b.value-a.value);
   const fresh = leads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).sort((a,b)=>b.value-a.value);
@@ -625,6 +628,7 @@ function PlaybookView({leads,setSelected,logActivity,isAdmin,archive,currentUser
               <div style={{display:"flex",gap:12,alignItems:"center"}}>
                 <span className="med-num text-primary">{fmt(l.value)}</span>
                 <Outreach lead={l} tpl={forceTpl||tplKey(l)} onLog={logActivity}/>
+                <button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>
                 {canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}
               </div>
             </div>
@@ -825,7 +829,7 @@ function DashView({stats,leads,setView,setSelected,coldN,actionN}) {
 // ── VIEW: PIPELINE ──
 // ═════════════════
 
-function PipeView({leads,update,setSelected,filterRep,setFilterRep,isAdmin,archive,currentUser}) {
+function PipeView({leads,update,setSelected,filterRep,setFilterRep,isAdmin,archive,currentUser,setScheduleLeadId}) {
   return (
     <div>
       <div className="flex-between mb-20"><div className="heading">Sales Pipeline</div>{isAdmin&&<select className="select" value={filterRep} onChange={e=>setFilterRep(e.target.value)}><option value="All">All Reps</option>{REPS.filter(r=>r!=="Unassigned").map(r=><option key={r}>{r}</option>)}</select>}</div>
@@ -841,7 +845,7 @@ function PipeView({leads,update,setSelected,filterRep,setFilterRep,isAdmin,archi
               <div className="flex-col gap-8" style={{padding:"8px 0",minHeight:120}}>
                 {sl.map(l => (
                   <div key={l.id} onClick={()=>setSelected(l.id)} className="card" style={{padding:"12px 14px",cursor:"pointer",borderLeft:`3px solid ${isCold(l)?"var(--cold)":STAGE_HEX[stage]}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}><div className="fw-600" style={{fontSize:13,marginBottom:4}}>{l.name}{isCold(l)&&" 🥶"}</div>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}><div className="fw-600" style={{fontSize:13,marginBottom:4}}>{l.name}{isCold(l)&&" 🥶"}</div><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></div>
                     <div className="text-xs" style={{marginBottom:6}}>{l.product}</div>
                     <div className="flex-between"><span className="fw-700 text-primary" style={{fontSize:13}}>{fmt(l.value)}</span><span className="text-xs">{l.rep}</span></div>
                     {!closed && <div style={{display:"flex",gap:4,marginTop:8}}>
@@ -901,7 +905,7 @@ function MapView({leads,setSelected,fStage,setFStage}) {
 // ── VIEW: GONE COLD ──
 // ═══════════════════════
 
-function ColdView({leads,setSelected,logActivity,archive,currentUser,isAdmin}) {
+function ColdView({leads,setSelected,logActivity,archive,currentUser,isAdmin,setScheduleLeadId}) {
   const cl=leads.filter(isCold).sort((a,b)=>b.value-a.value), tv=cl.reduce((s,l)=>s+l.value,0);
   if(!cl.length) return <div><div className="heading mb-20">Gone Cold</div><div className="card" style={{padding:48,textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>🔥</div><div className="fw-600 text-won" style={{fontSize:16}}>All caught up!</div></div></div>;
   return (
@@ -912,7 +916,7 @@ function ColdView({leads,setSelected,logActivity,archive,currentUser,isAdmin}) {
         <div key={l.id} onClick={()=>setSelected(l.id)} className="card cold-pulse" style={{padding:20,cursor:"pointer",borderLeft:"4px solid var(--cold)"}}>
           <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><ColdTag days={d}/></div></div>
           <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><Badge stage={l.stage}/><span className="text-xs">{l.product} · {l.rep}</span></div>
-          <div className="flex-between"><Outreach lead={l} tpl={tplKey(l)} onLog={logActivity}/>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div>
+          <div className="flex-between"><Outreach lead={l} tpl={tplKey(l)} onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
         </div>
       )})}</div>
     </div>
@@ -923,7 +927,7 @@ function ColdView({leads,setSelected,logActivity,archive,currentUser,isAdmin}) {
 // ── VIEW: REVIVAL ──
 // ═══════════════════════
 
-function RevivalView({leads,setSelected,update,logActivity,archive,currentUser,isAdmin}) {
+function RevivalView({leads,setSelected,update,logActivity,archive,currentUser,isAdmin,setScheduleLeadId}) {
   const ll=leads.filter(l=>l.stage==="Lost").sort((a,b)=>daysAgo(b.closedAt)-daysAgo(a.closedAt));
   const rr=ll.filter(isRevival), rv=rr.reduce((s,l)=>s+l.value,0);
   const reasonData=useMemo(()=>{const s={};LOSS_REASONS.forEach(r=>{s[r]={n:0,v:0}});ll.forEach(l=>{const r=l.lossReason||"Other";if(!s[r])s[r]={n:0,v:0};s[r].n++;s[r].v+=l.value});return Object.entries(s).filter(([_,d])=>d.n>0).map(([name,d])=>({name:name.length>14?name.slice(0,14)+"…":name,count:d.n,value:d.v}))},[ll]);
@@ -949,12 +953,12 @@ function RevivalView({leads,setSelected,update,logActivity,archive,currentUser,i
           <div key={l.id} onClick={()=>setSelected(l.id)} className={d>=90?"revival-glow":"card"} style={{background:"var(--card)",border:"1px solid var(--border)",borderRadius:12,padding:20,cursor:"pointer",borderLeft:`4px solid ${d>=90?"var(--cold)":"var(--accent)"}`}}>
             <div className="flex-between mb-12"><div><div className="fw-600" style={{fontSize:16,marginBottom:4}}>{l.name}</div><div className="text-xs">{l.contact} · {l.phone}</div></div><div style={{textAlign:"right"}}><div className="med-num text-primary">{fmt(l.value)}</div><span className="text-xs fw-600" style={{color:d>=90?"var(--cold)":"var(--accent)"}}>{d} days since lost</span></div></div>
             <div style={{display:"flex",gap:8,alignItems:"center"}} className="mb-12"><LossTag reason={l.lossReason}/><span className="text-xs">{l.product} · {l.rep}</span></div>
-            <div className="flex-between"><Outreach lead={l} tpl="winback" onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>reopen(e,l)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>♻️ Re-open</button><button onClick={e=>{e.stopPropagation();update(l.id,{revivalDismissed:true})}} className="btn-sm">Dismiss</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
+            <div className="flex-between"><Outreach lead={l} tpl="winback" onLog={logActivity}/><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={e=>reopen(e,l)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)"}}>♻️ Re-open</button><button onClick={e=>{e.stopPropagation();update(l.id,{revivalDismissed:true})}} className="btn-sm">Dismiss</button><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:15}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:15}}>📦</button>}</div></div>
           </div>
         )})}</div>
       </div>}
       <div className="heading-sm mb-12">All Lost Leads</div>
-      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr><th>Lead</th><th>Contact</th><th>Product</th><th>Value</th><th>Reason</th><th>Lost</th><th>Days</th><th style={{cursor:"default"}}></th></tr></thead><tbody>{ll.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isRevival(l)?"rgba(212,160,23,.04)":"transparent"}}><td className="fw-600">{l.name}{isRevival(l)&&" 🔄"}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="fw-600 text-primary">{fmt(l.value)}</td><td><LossTag reason={l.lossReason}/></td><td className="text-xs">{l.closedAt}</td><td className="fw-600" style={{color:daysAgo(l.closedAt)>=90?"var(--cold)":daysAgo(l.closedAt)>=60?"var(--accent)":"var(--text-lt)"}}>{daysAgo(l.closedAt)}d</td><td>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</td></tr>)}</tbody></table></div>
+      <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr><th>Lead</th><th>Contact</th><th>Product</th><th>Value</th><th>Reason</th><th>Lost</th><th>Days</th><th style={{cursor:"default"}}></th></tr></thead><tbody>{ll.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isRevival(l)?"rgba(212,160,23,.04)":"transparent"}}><td className="fw-600">{l.name}{isRevival(l)&&" 🔄"}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="fw-600 text-primary">{fmt(l.value)}</td><td><LossTag reason={l.lossReason}/></td><td className="text-xs">{l.closedAt}</td><td className="fw-600" style={{color:daysAgo(l.closedAt)>=90?"var(--cold)":daysAgo(l.closedAt)>=60?"var(--accent)":"var(--text-lt)"}}>{daysAgo(l.closedAt)}d</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -963,7 +967,7 @@ function RevivalView({leads,setSelected,update,logActivity,archive,currentUser,i
 // ── VIEW: ALL LEADS ──
 // ═══════════════════
 
-function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFStage,search,setSearch,archive,currentUser,isAdmin}) {
+function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFStage,search,setSearch,archive,currentUser,isAdmin,setScheduleLeadId}) {
   const[sk,setSk]=useState("updatedAt");const[sd,setSd]=useState(-1);
   const sorted=useMemo(()=>[...leads].sort((a,b)=>{if(sk==="value")return(a.value-b.value)*sd;return String(a[sk]||"").localeCompare(String(b[sk]||""))*sd}),[leads,sk,sd]);
   const toggle=k=>{sk===k?setSd(d=>d*-1):(setSk(k),setSd(-1))};
@@ -977,7 +981,7 @@ function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFSt
         </div>
       </div>
       <div className="card" style={{overflow:"hidden"}}><table className="table"><thead><tr>{[["name","Lead"],["contact","Contact"],["product","Product"],["source","Source"],["rep","Rep"],["stage","Stage"],["value","Value"],["updatedAt","Updated"]].map(([k,l])=><th key={k} onClick={()=>toggle(k)}>{l} {sk===k?(sd>0?"↑":"↓"):""}</th>)}<th style={{cursor:"default"}}></th></tr></thead>
-      <tbody>{sorted.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isCold(l)?"rgba(220,38,38,.02)":"transparent"}}><td className="fw-600">{l.name}{isCold(l)&&" 🥶"}{l.files?.length>0&&<span title={`${l.files.length} file${l.files.length>1?"s":""}`} style={{marginLeft:4,fontSize:10}}>📎{l.files.length}</span>}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="text-sm">{l.source}</td><td className="text-sm">{l.rep}</td><td><Badge stage={l.stage}/></td><td className="fw-600 text-primary">{fmt(l.value)}</td><td className="text-xs">{l.updatedAt}</td><td>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</td></tr>)}</tbody></table></div>
+      <tbody>{sorted.map(l=><tr key={l.id} onClick={()=>setSelected(l.id)} style={{background:isCold(l)?"rgba(220,38,38,.02)":"transparent"}}><td className="fw-600">{l.name}{isCold(l)&&" 🥶"}{l.files?.length>0&&<span title={`${l.files.length} file${l.files.length>1?"s":""}`} style={{marginLeft:4,fontSize:10}}>📎{l.files.length}</span>}</td><td className="text-sm">{l.contact}</td><td className="text-sm">{l.product}</td><td className="text-sm">{l.source}</td><td className="text-sm">{l.rep}</td><td><Badge stage={l.stage}/></td><td className="fw-600 text-primary">{fmt(l.value)}</td><td className="text-xs">{l.updatedAt}</td><td><div style={{display:"flex",gap:2}}><button onClick={e=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canArchive(l,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(l.id)}} title="Archive" className="icon-btn" style={{fontSize:13}}>📦</button>}</div></td></tr>)}</tbody></table></div>
     </div>
   );
 }
@@ -986,7 +990,7 @@ function LeadsTable({leads,setSelected,fRep,setFRep,fProd,setFProd,fStage,setFSt
 // ── VIEW: ARCHIVE ──
 // ═══════════════════════
 
-function ArchiveView({leads,restore,setSelected,currentUser,isAdmin}) {
+function ArchiveView({leads,restore,setSelected,currentUser,isAdmin,setScheduleLeadId}) {
   const[search,setSearch]=useState("");
   const[fRep,setFRep]=useState("All");
   const[fProd,setFProd]=useState("All");
@@ -1036,9 +1040,209 @@ function ArchiveView({leads,restore,setSelected,currentUser,isAdmin}) {
             <td><Badge stage={l.stage}/></td>
             <td className="fw-600 text-primary">{fmt(l.value)}</td>
             <td className="text-xs">{l.updatedAt}</td>
-            <td>{canRestore(l,currentUser,isAdmin)&&<button onClick={()=>restore(l.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"4px 12px"}}>Restore</button>}</td>
+            <td><div style={{display:"flex",gap:4,alignItems:"center"}}><button onClick={(e)=>{e.stopPropagation();setScheduleLeadId(l.id)}} title="Schedule" className="icon-btn" style={{fontSize:13}}>📅</button>{canRestore(l,currentUser,isAdmin)&&<button onClick={()=>restore(l.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"4px 12px"}}>Restore</button>}</div></td>
           </tr>)}</tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════
+// ── VIEW: CALENDAR ──
+// ═══════════════════════
+
+function CalendarView({appointments,leads,setSelected,currentUser,isAdmin,setScheduleLeadId}) {
+  const [calView,setCalView]=useState("month");
+  const [calDate,setCalDate]=useState(()=>new Date());
+  const [calFilterRep,setCalFilterRep]=useState("All");
+  const today=now();
+
+  const filtered=useMemo(()=>{
+    if(calFilterRep==="All") return appointments;
+    return appointments.filter(a=>a.lead.rep===calFilterRep);
+  },[appointments,calFilterRep]);
+
+  // Stats
+  const todayAppts=filtered.filter(a=>a.date===today).length;
+  const weekStart=new Date();weekStart.setDate(weekStart.getDate()-weekStart.getDay());
+  const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);
+  const ws=weekStart.toISOString().split("T")[0],we=weekEnd.toISOString().split("T")[0];
+  const weekAppts=filtered.filter(a=>a.date>=ws&&a.date<=we).length;
+  const ms=`${calDate.getFullYear()}-${String(calDate.getMonth()+1).padStart(2,"0")}`;
+  const monthAppts=filtered.filter(a=>a.date.startsWith(ms)).length;
+
+  // Month grid helpers
+  const year=calDate.getFullYear(),month=calDate.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const prevMonth=()=>{const d=new Date(calDate);d.setMonth(d.getMonth()-1);setCalDate(d)};
+  const nextMonth=()=>{const d=new Date(calDate);d.setMonth(d.getMonth()+1);setCalDate(d)};
+  const monthLabel=calDate.toLocaleString("en-US",{month:"long",year:"numeric"});
+
+  // Week view helpers
+  const getWeekStart=(d)=>{const w=new Date(d);w.setDate(w.getDate()-w.getDay());return w};
+  const [weekDate,setWeekDate]=useState(()=>getWeekStart(new Date()));
+  const prevWeek=()=>{const d=new Date(weekDate);d.setDate(d.getDate()-7);setWeekDate(d)};
+  const nextWeek=()=>{const d=new Date(weekDate);d.setDate(d.getDate()+7);setWeekDate(d)};
+  const weekDays=useMemo(()=>{const days=[];for(let i=0;i<7;i++){const d=new Date(weekDate);d.setDate(d.getDate()+i);days.push(d)}return days},[weekDate]);
+
+  const fmtTime=(t)=>{if(!t)return"";const[h,m]=t.split(":");const hr=parseInt(h);const ampm=hr>=12?"PM":"AM";return`${hr%12||12}:${m} ${ampm}`};
+
+  const AppointmentChip=({appt,compact})=>(
+    <div onClick={(e)=>{e.stopPropagation();setSelected(appt.lead.id)}} style={{
+      padding:compact?"2px 6px":"4px 8px",borderRadius:6,cursor:"pointer",
+      background:`${APPT_COLORS[appt.type]||"#6B7280"}15`,borderLeft:`3px solid ${APPT_COLORS[appt.type]||"#6B7280"}`,
+      fontSize:compact?10:11,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",transition:"all .15s"
+    }} title={`${appt.type}: ${appt.lead.name} at ${fmtTime(appt.time)}`}>
+      <span className="fw-600" style={{color:APPT_COLORS[appt.type]||"#6B7280"}}>{fmtTime(appt.time)}</span>
+      {!compact&&<span style={{color:"var(--text-mid)",marginLeft:4}}>{appt.lead.name}</span>}
+      {compact&&<span style={{color:"var(--text-mid)",marginLeft:3}}>{appt.lead.name.split(" ")[0]}</span>}
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="flex-between mb-20">
+        <div className="heading">📅 Schedule</div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          {isAdmin&&<select className="select" value={calFilterRep} onChange={e=>setCalFilterRep(e.target.value)}>
+            <option value="All">All Reps</option>
+            {REPS.filter(r=>r!=="Unassigned").map(r=><option key={r}>{r}</option>)}
+          </select>}
+          <div style={{display:"flex",gap:2}}>
+            {[["month","Month"],["week","Week"]].map(([k,l])=>(
+              <button key={k} onClick={()=>setCalView(k)} className="btn-sm" style={{
+                padding:"6px 14px",background:calView===k?"var(--primary)":"none",
+                color:calView===k?"#fff":"var(--text-mid)",borderColor:calView===k?"var(--primary)":"var(--border)",fontWeight:calView===k?600:400
+              }}>{l}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid-3 mb-20">
+        <Stat label="Today" value={todayAppts} sub={todayAppts===1?"appointment":"appointments"} color="#2563EB"/>
+        <Stat label="This Week" value={weekAppts} sub={weekAppts===1?"appointment":"appointments"} color="#7C3AED"/>
+        <Stat label="This Month" value={monthAppts} sub={monthAppts===1?"appointment":"appointments"} color="#D97706"/>
+      </div>
+
+      {calView==="month" && (
+        <div className="card" style={{overflow:"hidden"}}>
+          <div className="flex-between" style={{padding:"16px 20px",borderBottom:"1px solid var(--border)"}}>
+            <button onClick={prevMonth} className="btn-sm" style={{padding:"6px 12px"}}>←</button>
+            <div className="fw-700" style={{fontSize:16}}>{monthLabel}</div>
+            <button onClick={nextMonth} className="btn-sm" style={{padding:"6px 12px"}}>→</button>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>(
+              <div key={d} style={{padding:"8px",textAlign:"center",fontSize:11,fontWeight:600,color:"var(--text-lt)",borderBottom:"1px solid var(--border)",textTransform:"uppercase",letterSpacing:".08em"}}>{d}</div>
+            ))}
+            {Array.from({length:firstDay}).map((_,i)=>(
+              <div key={"e"+i} style={{padding:8,minHeight:90,borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",background:"var(--bg)"}}/>
+            ))}
+            {Array.from({length:daysInMonth}).map((_,i)=>{
+              const day=i+1;
+              const dateStr=`${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+              const dayAppts=filtered.filter(a=>a.date===dateStr).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+              const isToday=dateStr===today;
+              return (
+                <div key={day} style={{padding:6,minHeight:90,borderBottom:"1px solid var(--border)",borderRight:"1px solid var(--border)",background:isToday?"rgba(37,99,235,.04)":"transparent"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                    <span style={{fontSize:12,fontWeight:isToday?700:500,color:isToday?"var(--new)":"var(--text-mid)",background:isToday?"rgba(37,99,235,.12)":"none",borderRadius:99,width:isToday?24:undefined,height:isToday?24:undefined,display:isToday?"flex":"inline",alignItems:"center",justifyContent:"center"}}>{day}</span>
+                  </div>
+                  <div className="flex-col" style={{gap:2}}>
+                    {dayAppts.slice(0,3).map(a=><AppointmentChip key={a.id} appt={a} compact={true}/>)}
+                    {dayAppts.length>3&&<div className="text-xs" style={{paddingLeft:4}}>+{dayAppts.length-3} more</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {calView==="week" && (
+        <div>
+          <div className="card mb-16" style={{overflow:"hidden"}}>
+            <div className="flex-between" style={{padding:"12px 20px",borderBottom:"1px solid var(--border)"}}>
+              <button onClick={prevWeek} className="btn-sm" style={{padding:"6px 12px"}}>←</button>
+              <div className="fw-600" style={{fontSize:14}}>
+                {weekDays[0].toLocaleDateString("en-US",{month:"short",day:"numeric"})} — {weekDays[6].toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+              </div>
+              <button onClick={nextWeek} className="btn-sm" style={{padding:"6px 12px"}}>→</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+              {weekDays.map(d=>{
+                const ds=d.toISOString().split("T")[0];
+                const isT=ds===today;
+                return (
+                  <div key={ds} style={{padding:"12px 8px",textAlign:"center",background:isT?"rgba(37,99,235,.06)":"transparent",borderRight:"1px solid var(--border)"}}>
+                    <div style={{fontSize:10,fontWeight:600,color:"var(--text-lt)",textTransform:"uppercase",letterSpacing:".08em"}}>{d.toLocaleDateString("en-US",{weekday:"short"})}</div>
+                    <div style={{fontSize:18,fontWeight:isT?700:500,color:isT?"var(--new)":"var(--text)",marginTop:2}}>{d.getDate()}</div>
+                    {filtered.filter(a=>a.date===ds).length>0&&<div style={{width:6,height:6,borderRadius:99,background:"var(--new)",margin:"4px auto 0"}}/>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex-col gap-16">
+            {weekDays.map(d=>{
+              const ds=d.toISOString().split("T")[0];
+              const dayAppts=filtered.filter(a=>a.date===ds).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+              const isT=ds===today;
+              return (
+                <div key={ds}>
+                  <div className="flex-between mb-8">
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span className="fw-600" style={{fontSize:14,color:isT?"var(--new)":"var(--text)"}}>{d.toLocaleDateString("en-US",{weekday:"long",month:"short",day:"numeric"})}</span>
+                      {isT&&<span className="badge" style={{background:"rgba(37,99,235,.1)",color:"var(--new)",border:"1px solid rgba(37,99,235,.25)",fontSize:9}}>Today</span>}
+                    </div>
+                    <span className="text-xs">{dayAppts.length} appointment{dayAppts.length!==1?"s":""}</span>
+                  </div>
+                  {dayAppts.length===0?(
+                    <div style={{padding:"12px 16px",background:"var(--bg)",borderRadius:8,border:"1px solid var(--border)"}} className="text-sm" style={{color:"var(--text-lt)",fontSize:13,padding:"12px 16px",background:"var(--bg)",borderRadius:8,border:"1px solid var(--border)"}}>No appointments</div>
+                  ):(
+                    <div className="flex-col gap-8">
+                      {dayAppts.map(a=>(
+                        <div key={a.id} onClick={()=>setSelected(a.lead.id)} className="card hover-lift" style={{padding:"14px 18px",cursor:"pointer",borderLeft:`3px solid ${APPT_COLORS[a.type]||"#6B7280"}`,transition:"all .15s"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:12}}>
+                            <div style={{minWidth:70}}>
+                              <span className="fw-700" style={{fontSize:14,color:APPT_COLORS[a.type]||"#6B7280"}}>{fmtTime(a.time)}</span>
+                            </div>
+                            <span className="badge" style={{background:`${APPT_COLORS[a.type]||"#6B7280"}18`,color:APPT_COLORS[a.type]||"#6B7280",border:`1px solid ${APPT_COLORS[a.type]||"#6B7280"}35`}}>{a.type}</span>
+                            <div style={{flex:1}}>
+                              <span className="fw-600" style={{fontSize:14}}>{a.lead.name}</span>
+                              <span className="text-xs" style={{marginLeft:8}}>{a.lead.contact}</span>
+                            </div>
+                            <span className="text-sm">{a.lead.product}</span>
+                            <span className="fw-600 text-primary" style={{fontSize:13}}>{fmt(a.lead.value)}</span>
+                            <span className="text-xs">{a.lead.rep}</span>
+                          </div>
+                          {a.notes&&<div className="text-xs" style={{marginTop:6,marginLeft:82,color:"var(--text-mid)"}}>{a.notes}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="card card-pad-sm mt-24">
+        <div className="fw-600 mb-12" style={{fontSize:12}}>Appointment Types</div>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+          {APPT_TYPES.map(t=>(
+            <div key={t} style={{display:"flex",gap:6,alignItems:"center"}}>
+              <div style={{width:10,height:10,borderRadius:3,background:APPT_COLORS[t]}}/>
+              <span className="text-xs">{t}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1240,7 +1444,7 @@ function PriceRefView() {
 // ── MODAL: LEAD DETAIL ──
 // ═══════════════════════════
 
-function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,restore,currentUser,isAdmin}) {
+function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,restore,currentUser,isAdmin,setScheduleLeadId,deleteAppointment}) {
   if(!lead) return null;
   const [editing,setEditing]=useState(false);
   const [form,setForm]=useState({...lead});
@@ -1306,6 +1510,35 @@ function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,
           />
         </div>
 
+        {/* Upcoming Appointments */}
+        <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid var(--border)"}}>
+          <div className="flex-between mb-12">
+            <div className="heading-sm">📅 Appointments{(lead.appointments||[]).length>0?` (${(lead.appointments||[]).length})`:""}</div>
+            <button onClick={()=>setScheduleLeadId(lead.id)} className="btn-sm">+ Schedule</button>
+          </div>
+        {(lead.appointments||[]).length>0 && (
+          <div>
+            <div className="flex-col gap-8">
+              {[...(lead.appointments||[])].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(a=>{
+                const fmtD=(d,t)=>{try{const dt=new Date(d+"T00:00:00");const mo=dt.toLocaleString("en-US",{month:"short"});const day=dt.getDate();const[h,m]=t.split(":");const hr=parseInt(h);const ampm=hr>=12?"PM":"AM";const h12=hr%12||12;return`${mo} ${day} at ${h12}:${m} ${ampm}`}catch{return d+" "+t}};
+                return (
+                  <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"var(--bg)",borderRadius:8,borderLeft:`3px solid ${APPT_COLORS[a.type]||"#6B7280"}`}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <span className="badge" style={{background:`${APPT_COLORS[a.type]||"#6B7280"}18`,color:APPT_COLORS[a.type]||"#6B7280",border:`1px solid ${APPT_COLORS[a.type]||"#6B7280"}35`,fontSize:10}}>{a.type}</span>
+                        <span className="text-sm fw-600">{fmtD(a.date,a.time)}</span>
+                      </div>
+                      {a.notes&&<div className="text-xs" style={{marginTop:4}}>{a.notes}</div>}
+                    </div>
+                    <button onClick={()=>deleteAppointment(lead.id,a.id)} className="icon-btn" style={{fontSize:14}} title="Delete">🗑</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        </div>
+
         <div style={{marginTop:16,paddingTop:16,borderTop:"1px solid var(--border)"}}>
           <div className="flex-between mb-12"><div className="heading-sm">Activity Timeline</div><button onClick={()=>setShowNote(true)} className="btn-sm">+ Add Note</button></div>
           {showNote&&<div style={{background:"var(--bg)",borderRadius:8,padding:12}} className="mb-12">
@@ -1324,6 +1557,7 @@ function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,
             <button onClick={()=>setEditing(true)} className="btn-primary" style={{flex:1}}>Edit Lead</button>
             {!lead.archived&&!["Won","Lost"].includes(lead.stage)&&<><button onClick={()=>update(lead.id,{stage:"Won"})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>Won</button><button onClick={()=>update(lead.id,{stage:"Lost"})} className="btn-action" style={{background:"rgba(155,44,44,.08)",color:"var(--lost)",padding:"10px 16px",fontSize:13}}>Lost</button></>}
             {!lead.archived&&lead.stage==="Lost"&&<button onClick={()=>update(lead.id,{stage:"Contacted",closedAt:null,revivalDismissed:false})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Re-open</button>}
+            <button onClick={()=>setScheduleLeadId(lead.id)} title="Schedule" className="icon-btn" style={{fontSize:18}}>📅</button>
             {canArchive(lead,currentUser,isAdmin)&&<button onClick={()=>archive(lead.id)} title="Archive" className="icon-btn" style={{fontSize:18}}>📦</button>}
             {canRestore(lead,currentUser,isAdmin)&&<button onClick={()=>restore(lead.id)} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Restore</button>}
             {confirmDel?<button onClick={()=>del(lead.id)} className="btn-action" style={{background:"var(--lost)",color:"#fff",padding:"10px 16px",fontSize:13}}>Confirm Delete</button>:<button onClick={()=>setConfirmDel(true)} className="btn-sm" style={{color:"var(--lost)",borderColor:"rgba(155,44,44,.3)"}}>🗑</button>}
@@ -1360,11 +1594,91 @@ function AddModal({onClose,addLead}) {
   );
 }
 
+// ═══════════════════════════
+// ── MODAL: SCHEDULE ──
+// ═══════════════════════════
+
+function ScheduleModal({lead,onClose,addAppointment,deleteAppointment,currentUser}) {
+  if(!lead) return null;
+  const [form,setForm]=useState({date:"",time:"10:00",type:APPT_TYPES[0],notes:""});
+  const appts = lead.appointments||[];
+
+  const submit=()=>{
+    if(!form.date) return;
+    addAppointment(lead.id,{
+      id:"appt_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,8),
+      date:form.date, time:form.time, type:form.type, notes:form.notes,
+      by:currentUser?.name||lead.rep, createdAt:now()
+    });
+    setForm({date:"",time:"10:00",type:APPT_TYPES[0],notes:""});
+  };
+
+  const fmtApptDate=(d,t)=>{
+    try{const dt=new Date(d+"T00:00:00");const mo=dt.toLocaleString("en-US",{month:"short"});const day=dt.getDate();const [h,m]=t.split(":");const hr=parseInt(h);const ampm=hr>=12?"PM":"AM";const h12=hr%12||12;return `${mo} ${day} at ${h12}:${m} ${ampm}`;}catch{return d+" "+t;}
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:480}}>
+        <div className="flex-between mb-20">
+          <div>
+            <h3 style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600}}>Schedule Appointment</h3>
+            <div className="text-sm" style={{marginTop:4}}>{lead.name}</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",fontSize:22,cursor:"pointer",color:"var(--text-lt)"}}>×</button>
+        </div>
+
+        <div className="grid-2" style={{gap:"0 12px"}}>
+          <div style={{marginBottom:14}}>
+            <div className="label" style={{marginBottom:4}}>Date *</div>
+            <input className="input" type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <div className="label" style={{marginBottom:4}}>Time</div>
+            <input className="input" type="time" value={form.time} onChange={e=>setForm(f=>({...f,time:e.target.value}))}/>
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div className="label" style={{marginBottom:4}}>Type</div>
+          <select className="input" value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))}>
+            {APPT_TYPES.map(t=><option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div className="label" style={{marginBottom:4}}>Notes</div>
+          <textarea className="input" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} rows={2} placeholder="Optional notes..." style={{resize:"vertical",fontFamily:"var(--font)"}}/>
+        </div>
+        <button onClick={submit} className="btn-primary" style={{width:"100%",marginBottom:16}} disabled={!form.date}>📅 Schedule</button>
+
+        {appts.length>0 && (
+          <div style={{borderTop:"1px solid var(--border)",paddingTop:16}}>
+            <div className="heading-sm mb-12">Scheduled ({appts.length})</div>
+            <div className="flex-col gap-8">
+              {[...appts].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(a=>(
+                <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"var(--bg)",borderRadius:8,borderLeft:`3px solid ${APPT_COLORS[a.type]||"#6B7280"}`}}>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <span className="badge" style={{background:`${APPT_COLORS[a.type]||"#6B7280"}18`,color:APPT_COLORS[a.type]||"#6B7280",border:`1px solid ${APPT_COLORS[a.type]||"#6B7280"}35`,fontSize:10}}>{a.type}</span>
+                      <span className="text-sm fw-600">{fmtApptDate(a.date,a.time)}</span>
+                    </div>
+                    {a.notes&&<div className="text-xs" style={{marginTop:4}}>{a.notes}</div>}
+                  </div>
+                  <button onClick={()=>deleteAppointment(lead.id,a.id)} className="icon-btn" style={{fontSize:14}} title="Delete">🗑</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ══════════════════════════
 // ── VIEW: NEW LEADS ──
 // ══════════════════════════
 
-function NewLeadsView({leads,assign,setSelected,archive,currentUser,isAdmin}) {
+function NewLeadsView({leads,assign,setSelected,archive,currentUser,isAdmin,setScheduleLeadId}) {
   const newLeads = useMemo(()=>leads.filter(l=>l.stage==="New Lead").sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)),[leads]);
   const unassigned = newLeads.filter(l=>!l.rep||l.rep==="Unassigned");
   const assigned = newLeads.filter(l=>l.rep&&l.rep!=="Unassigned");
@@ -1390,6 +1704,7 @@ function NewLeadsView({leads,assign,setSelected,archive,currentUser,isAdmin}) {
           ))}
         </div>
         <div className="text-xs" style={{width:60,textAlign:"right",flexShrink:0}}>{daysAgo(lead.createdAt)===0?"Today":daysAgo(lead.createdAt)+"d ago"}</div>
+        <button onClick={e=>{e.stopPropagation();setScheduleLeadId(lead.id)}} title="Schedule" className="icon-btn" style={{fontSize:13,flexShrink:0}}>📅</button>
         {canArchive(lead,currentUser,isAdmin)&&<button onClick={e=>{e.stopPropagation();archive(lead.id)}} title="Archive" className="icon-btn" style={{fontSize:13,flexShrink:0}}>📦</button>}
       </div>
     </div>
@@ -1662,6 +1977,7 @@ function App() {
   const [showAdd,setShowAdd]=useState(false);
   const [showImport,setShowImport]=useState(false);
   const [importData,setImportData]=useState(null);
+  const [scheduleLeadId,setScheduleLeadId]=useState(null);
   const [fRep,setFRep]=useState("All");
   const [fProd,setFProd]=useState("All");
   const [fStage,setFStage]=useState("All");
@@ -1795,6 +2111,16 @@ function App() {
   },[leads,currentUser,isAdmin]);
   const archiveN=myArchivedLeads.length;
 
+  const allAppointments=useMemo(()=>{
+    const result=[];
+    myLeads.forEach(l=>{(l.appointments||[]).forEach(a=>{result.push({...a,lead:l})})});
+    return result;
+  },[myLeads]);
+  const upcomingN=useMemo(()=>{
+    const t=now();const d7=new Date();d7.setDate(d7.getDate()+7);const w=d7.toISOString().split("T")[0];
+    return allAppointments.filter(a=>a.date>=t&&a.date<=w).length;
+  },[allAppointments]);
+
   const coldN=useMemo(()=>myLeads.filter(isCold).length,[myLeads]);
   const revN=useMemo(()=>myLeads.filter(isRevival).length,[myLeads]);
   const actionN=useMemo(()=>{return myLeads.filter(isCold).length+myLeads.filter(l=>l.stage==="New Lead"&&(l.activity||[]).length<=1).length+myLeads.filter(l=>l.stage==="Quote Sent").length+myLeads.filter(l=>l.stage==="Negotiating").length},[myLeads]);
@@ -1828,12 +2154,30 @@ function App() {
     setLeads(p=>p.map(l=>{if(l.id!==id)return l;return{...l,archived:false,updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:"Lead restored from archive",date:now(),by}]}}));
   },[currentUser]);
 
+  const addAppointment=useCallback((id,appt)=>{
+    const by=currentUser?currentUser.name:"System";
+    const fmtD=(d,t)=>{try{const dt=new Date(d+"T00:00:00");const mo=dt.toLocaleString("en-US",{month:"short"});const day=dt.getDate();const[h,m]=t.split(":");const hr=parseInt(h);const ampm=hr>=12?"PM":"AM";const h12=hr%12||12;return`${mo} ${day} at ${h12}:${m} ${ampm}`}catch{return d+" "+t}};
+    setLeads(p=>p.map(l=>{
+      if(l.id!==id)return l;
+      return{...l,appointments:[...(l.appointments||[]),appt],updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:`Appointment scheduled: ${appt.type} on ${fmtD(appt.date,appt.time)}`,date:now(),by}]};
+    }));
+  },[currentUser]);
+
+  const deleteAppointment=useCallback((id,apptId)=>{
+    const by=currentUser?currentUser.name:"System";
+    setLeads(p=>p.map(l=>{
+      if(l.id!==id)return l;
+      const appt=(l.appointments||[]).find(a=>a.id===apptId);
+      return{...l,appointments:(l.appointments||[]).filter(a=>a.id!==apptId),updatedAt:now(),activity:[...(l.activity||[]),{type:"note",text:`Appointment cancelled${appt?": "+appt.type:""}`,date:now(),by}]};
+    }));
+  },[currentUser]);
+
   const filtered=useMemo(()=>myLeads.filter(l=>{
     if(fRep!=="All"&&l.rep!==fRep)return false;if(fProd!=="All"&&l.product!==fProd)return false;if(fStage!=="All"&&l.stage!==fStage)return false;
     if(search&&!l.name.toLowerCase().includes(search.toLowerCase())&&!l.contact.toLowerCase().includes(search.toLowerCase()))return false;return true;
   }),[myLeads,fRep,fProd,fStage,search]);
 
-  const NAV=[["playbook","📋 Playbook"],["newleads","New Leads"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["archive","Archive"],["reps","Reps"]];
+  const NAV=[["playbook","📋 Playbook"],["newleads","New Leads"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["schedule","📅 Schedule"],["leads","Leads"],["archive","Archive"],["reps","Reps"]];
 
   // ── Login gate (after all hooks) ──
   if(!fbReady) return (
@@ -1855,6 +2199,7 @@ function App() {
             {k==="playbook"&&actionN>0&&<span className="nav-badge" style={{background:"var(--quote)"}}>{actionN}</span>}
             {k==="newleads"&&newLeadN>0&&<span className="nav-badge" style={{background:"var(--new)"}}>{newLeadN}</span>}
             {k==="archive"&&archiveN>0&&<span className="nav-badge" style={{background:"#6B7280"}}>{archiveN}</span>}
+            {k==="schedule"&&upcomingN>0&&<span className="nav-badge" style={{background:"var(--new)"}}>{upcomingN}</span>}
           </button>
         ))}</nav>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
@@ -1873,23 +2218,25 @@ function App() {
       </header>
 
       <main className="main">
-        {view==="playbook"&&<PlaybookView leads={myLeads} setSelected={setSelected} logActivity={log} isAdmin={isAdmin} archive={archive} currentUser={currentUser}/>}
-        {view==="newleads"&&<NewLeadsView leads={myLeads} assign={assign} setSelected={setSelected} archive={archive} currentUser={currentUser} isAdmin={isAdmin}/>}
+        {view==="playbook"&&<PlaybookView leads={myLeads} setSelected={setSelected} logActivity={log} isAdmin={isAdmin} archive={archive} currentUser={currentUser} setScheduleLeadId={setScheduleLeadId}/>}
+        {view==="newleads"&&<NewLeadsView leads={myLeads} assign={assign} setSelected={setSelected} archive={archive} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
         {view==="dashboard"&&<DashView stats={stats} leads={myLeads} setView={setView} setSelected={setSelected} coldN={coldN} actionN={actionN}/>}
-        {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep} isAdmin={isAdmin} archive={archive} currentUser={currentUser}/>}
+        {view==="pipeline"&&<PipeView leads={filtered} update={update} setSelected={setSelected} filterRep={fRep} setFilterRep={setFRep} isAdmin={isAdmin} archive={archive} currentUser={currentUser} setScheduleLeadId={setScheduleLeadId}/>}
         {view==="map"&&<MapView leads={myLeads} setSelected={setSelected} fStage={mapStage} setFStage={setMapStage}/>}
-        {view==="cold"&&<ColdView leads={myLeads} setSelected={setSelected} logActivity={log} archive={archive} currentUser={currentUser} isAdmin={isAdmin}/>}
-        {view==="revival"&&<RevivalView leads={myLeads} setSelected={setSelected} update={update} logActivity={log} archive={archive} currentUser={currentUser} isAdmin={isAdmin}/>}
+        {view==="cold"&&<ColdView leads={myLeads} setSelected={setSelected} logActivity={log} archive={archive} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
+        {view==="revival"&&<RevivalView leads={myLeads} setSelected={setSelected} update={update} logActivity={log} archive={archive} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
         {view==="referrals"&&<ReferralView leads={myLeads} setSelected={setSelected}/>}
         {view==="pricing"&&<PriceRefView/>}
-        {view==="leads"&&<LeadsTable leads={filtered} setSelected={setSelected} fRep={fRep} setFRep={setFRep} fProd={fProd} setFProd={setFProd} fStage={fStage} setFStage={setFStage} search={search} setSearch={setSearch} archive={archive} currentUser={currentUser} isAdmin={isAdmin}/>}
-        {view==="archive"&&<ArchiveView leads={myArchivedLeads} restore={restore} setSelected={setSelected} currentUser={currentUser} isAdmin={isAdmin}/>}
+        {view==="schedule"&&<CalendarView appointments={allAppointments} leads={myLeads} setSelected={setSelected} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
+        {view==="leads"&&<LeadsTable leads={filtered} setSelected={setSelected} fRep={fRep} setFRep={setFRep} fProd={fProd} setFProd={setFProd} fStage={fStage} setFStage={setFStage} search={search} setSearch={setSearch} archive={archive} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
+        {view==="archive"&&<ArchiveView leads={myArchivedLeads} restore={restore} setSelected={setSelected} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId}/>}
         {view==="reps"&&<RepsView stats={stats} setView={setView} setFRep={setFRep}/>}
       </main>
 
-      {selected&&<LeadModal lead={leads.find(l=>l.id===selected)} onClose={()=>setSelected(null)} update={update} del={del} logActivity={log} addFile={addFile} delFile={delFile} archive={archive} restore={restore} currentUser={currentUser} isAdmin={isAdmin}/>}
+      {selected&&<LeadModal lead={leads.find(l=>l.id===selected)} onClose={()=>setSelected(null)} update={update} del={del} logActivity={log} addFile={addFile} delFile={delFile} archive={archive} restore={restore} currentUser={currentUser} isAdmin={isAdmin} setScheduleLeadId={setScheduleLeadId} deleteAppointment={deleteAppointment}/>}
       {showAdd&&<AddModal onClose={()=>setShowAdd(false)} addLead={add}/>}
       {showImport&&<ImportQuoteModal onClose={()=>{setShowImport(false);setImportData(null)}} addLead={add} leads={leads} initialData={importData}/>}
+      {scheduleLeadId&&<ScheduleModal lead={leads.find(l=>l.id===scheduleLeadId)} onClose={()=>setScheduleLeadId(null)} addAppointment={addAppointment} deleteAppointment={deleteAppointment} currentUser={currentUser}/>}
     </div>
   );
 }
