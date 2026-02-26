@@ -12,8 +12,9 @@
   <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <style>
     :root {
       --primary:#1B4332; --primary-lt:#2D6A4F; --accent:#D4A017; --accent-lt:#E8C547;
@@ -143,9 +144,11 @@ const FIREBASE_CONFIG = {
   appId: "1:70117836937:web:9132498369360dbd9b5e58"
 };
 firebase.initializeApp(FIREBASE_CONFIG);
+const fbAuth = firebase.auth();
 const fbDb = firebase.database();
 const fbLeadsRef = fbDb.ref('leads');
 const fbImportsRef = fbDb.ref('pending_imports');
+const FB_AUTH_EMAIL = 'crm@lfpease.com';
 
 // ═══════════════════════
 // ── CONSTANTS & CONFIG ──
@@ -396,17 +399,77 @@ function FileManager({files,onAdd,onDelete}) {
 
 function LoginScreen({onLogin}) {
   const icons = {admin:"👑", rep:"📋"};
+  const [pw,setPw]=useState("");
+  const [err,setErr]=useState("");
+  const [busy,setBusy]=useState(false);
+
+  const doLogin=async(u)=>{
+    if(!pw){setErr("Enter the team password");return;}
+    setBusy(true);setErr("");
+    try{
+      const apiKey=FIREBASE_CONFIG.apiKey;
+      // Verify password via REST API (works on any protocol including file://)
+      let res=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email:FB_AUTH_EMAIL,password:pw,returnSecureToken:true})
+      });
+      let data=await res.json();
+      if(data.error){
+        const msg=data.error.message;
+        if(msg==='EMAIL_NOT_FOUND'||msg==='INVALID_LOGIN_CREDENTIALS'){
+          // Account may not exist yet (Firebase hides this behind generic error)
+          // Try creating the account — if it already exists, THEN the password was wrong
+          const signUpRes=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({email:FB_AUTH_EMAIL,password:pw,returnSecureToken:true})
+          });
+          const signUpData=await signUpRes.json();
+          if(signUpData.error){
+            if(signUpData.error.message==='EMAIL_EXISTS'){
+              // Account exists — the original password was genuinely wrong
+              setErr("Wrong password");return;
+            }
+            throw new Error(signUpData.error.message);
+          }
+          data=signUpData; // Account created successfully
+        }else if(msg.includes('TOO_MANY')){setErr("Too many attempts — wait a moment");return;}
+        else{throw new Error(msg);}
+      }
+      // REST auth succeeded — now sign in the SDK so database listeners are authenticated
+      try{
+        await fbAuth.signInWithEmailAndPassword(FB_AUTH_EMAIL,pw);
+      }catch(sdkErr){
+        // SDK might fail on some setups — try creating account via SDK too
+        if(sdkErr.code==='auth/user-not-found'){
+          await fbAuth.createUserWithEmailAndPassword(FB_AUTH_EMAIL,pw);
+        }else{
+          console.warn('SDK auth failed (REST succeeded):',sdkErr.code);
+          throw sdkErr;
+        }
+      }
+      onLogin(u);
+    }catch(e){
+      setErr(e.message||"Authentication failed — check your internet connection");
+    }finally{setBusy(false);}
+  };
+
   return (
     <div style={{minHeight:"100vh",background:"var(--primary)",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",padding:24}}>
       <div style={{textAlign:"center",marginBottom:40}}>
         <div style={{width:64,height:64,background:"var(--accent)",borderRadius:16,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:24,color:"var(--primary)",margin:"0 auto 16px"}}>LFP</div>
         <div style={{fontFamily:"var(--font-display)",fontSize:28,fontWeight:600,color:"#fff",letterSpacing:".02em"}}>L.F. Pease</div>
         <div style={{fontSize:11,color:"rgba(255,255,255,.5)",letterSpacing:".15em",textTransform:"uppercase",marginTop:4}}>Awning & Sunroom Co.</div>
-        <div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginTop:20}}>Select your account to continue</div>
+        <div style={{fontSize:14,color:"rgba(255,255,255,.7)",marginTop:20}}>Enter the team password and select your account</div>
       </div>
-      <div className="grid-2" style={{maxWidth:460,width:"100%",gap:16}}>
+      <div style={{maxWidth:460,width:"100%",marginBottom:24}}>
+        <input type="password" className="input" placeholder="Team password" value={pw} onChange={e=>{setPw(e.target.value);setErr("")}}
+          onKeyDown={e=>{if(e.key==="Enter")e.target.blur()}}
+          style={{textAlign:"center",fontSize:15,padding:"12px 16px",borderRadius:10,background:"rgba(255,255,255,.95)",border:"2px solid "+(err?"var(--lost)":"transparent")}} />
+        {err&&<div style={{color:"#f87171",fontSize:12,textAlign:"center",marginTop:8}}>{err}</div>}
+      </div>
+      <div className="grid-2" style={{maxWidth:460,width:"100%",gap:16,opacity:busy?.5:1,pointerEvents:busy?"none":"auto"}}>
         {USERS.map(u => (
-          <div key={u.name} className="card hover-scale" onClick={()=>onLogin(u)}
+          <div key={u.name} className="card hover-scale" onClick={()=>doLogin(u)}
             style={{padding:"28px 20px",textAlign:"center",cursor:"pointer",transition:"all .2s",borderRadius:14,border:"2px solid transparent"}}
             onMouseEnter={e=>e.currentTarget.style.borderColor="var(--accent)"}
             onMouseLeave={e=>e.currentTarget.style.borderColor="transparent"}>
@@ -1395,9 +1458,22 @@ function App() {
   const fromFirebase=useRef(false);
 
   // ── User login state ──
-  const [currentUser,setCurrentUser]=useState(()=>{try{return JSON.parse(localStorage.getItem(USER_SK))}catch{return null}});
+  const [currentUser,setCurrentUser]=useState(null);
+  const [fbReady,setFbReady]=useState(false);
+
+  // On mount: if Firebase session persists AND we have a saved CRM user, auto-login (skip password)
+  useEffect(()=>{
+    const unsub=fbAuth.onAuthStateChanged(user=>{
+      if(user){
+        try{const saved=JSON.parse(localStorage.getItem(USER_SK));if(saved)setCurrentUser(saved);}catch{}
+      }
+      setFbReady(true);
+    });
+    return()=>unsub();
+  },[]);
+
   const handleLogin=useCallback(u=>{setCurrentUser(u);try{localStorage.setItem(USER_SK,JSON.stringify(u))}catch{}},[]);
-  const handleLogout=useCallback(()=>{setCurrentUser(null);try{localStorage.removeItem(USER_SK)}catch{}},[]);
+  const handleLogout=useCallback(()=>{fbAuth.signOut();setCurrentUser(null);try{localStorage.removeItem(USER_SK)}catch{}},[]);
   const isAdmin=currentUser?.role==="admin";
 
   // ── Save to localStorage + push to Firebase ──
@@ -1411,16 +1487,18 @@ function App() {
     fbWriteAll(leads);
   },[leads]);
 
-  // ── Firebase: connection status ──
+  // ── Firebase: connection status (gated behind auth) ──
   useEffect(()=>{
+    if(!fbAuth.currentUser)return;
     const connRef=fbDb.ref('.info/connected');
     const handler=snap=>setFbConnected(!!snap.val());
     connRef.on('value',handler);
     return()=>connRef.off('value',handler);
-  },[]);
+  },[currentUser]);
 
-  // ── Firebase: real-time sync + initial migration ──
+  // ── Firebase: real-time sync + initial migration (gated behind auth) ──
   useEffect(()=>{
+    if(!fbAuth.currentUser)return;
     // One-time check: if Firebase is empty, push our local data up
     fbLeadsRef.once('value').then(snap=>{
       if(!snap.val()){
@@ -1444,10 +1522,11 @@ function App() {
     };
     fbLeadsRef.on('value',handler);
     return()=>fbLeadsRef.off('value',handler);
-  },[]);
+  },[currentUser]);
 
-  // ── Firebase: pending_imports listener (auto-detect Access exports) ──
+  // ── Firebase: pending_imports listener (gated behind auth) ──
   useEffect(()=>{
+    if(!fbAuth.currentUser)return;
     const handler=snap=>{
       const data=snap.val();
       if(data){
@@ -1459,7 +1538,7 @@ function App() {
     };
     fbImportsRef.on('child_added',handler);
     return()=>fbImportsRef.off('child_added',handler);
-  },[]);
+  },[currentUser]);
 
   // ── Per-user lead filtering ──
   const myLeads=useMemo(()=>{
@@ -1498,6 +1577,11 @@ function App() {
   const NAV=[["playbook","📋 Playbook"],["newleads","New Leads"],["dashboard","Dashboard"],["pipeline","Pipeline"],["map","Map"],["cold","Cold"],["revival","Revival"],["referrals","Referrals"],["pricing","💰 Pricing"],["leads","Leads"],["reps","Reps"]];
 
   // ── Login gate (after all hooks) ──
+  if(!fbReady) return (
+    <div style={{minHeight:"100vh",background:"var(--primary)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{color:"rgba(255,255,255,.6)",fontSize:14}}>Loading...</div>
+    </div>
+  );
   if(!currentUser) return <LoginScreen onLogin={handleLogin}/>;
 
   return (
