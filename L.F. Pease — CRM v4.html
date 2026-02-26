@@ -1397,15 +1397,88 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
     }
   }, [initialData]);
 
-  // If no initialData, try protocol handler to auto-read from Access
+  // If no initialData, trigger protocol handler to scan Access, then poll for result
   useEffect(() => {
     if(initialData || form) return;
     setWaiting(true);
-    // Try protocol handler (works on machines where it's registered, fails silently elsewhere)
-    try { window.location.href = "lfpcrm:import"; } catch(e) {}
-    // After a few seconds, show manual options as fallback
-    waitTimer.current = setTimeout(() => setWaiting(false), 8000);
-    return () => clearTimeout(waitTimer.current);
+    let cancelled = false;
+
+    // Only accept data written after this moment (PS1 hasn't run yet)
+    const scanStart = Date.now() - 2000; // 2s buffer for clock jitter
+
+    // Fire the lfpcrm: protocol handler — triggers PS1 to read current Access record
+    // and write crm-import-data.js + push to Firebase
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = 'lfpcrm:import';
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 2000);
+    } catch(e) {}
+
+    // Poll for fresh crm-import-data.js (PS1 writes it within ~2-3 seconds)
+    let attempts = 0;
+    const maxAttempts = 10; // ~5 seconds of polling
+    const pollInterval = 500;
+
+    function pollForData() {
+      if(cancelled) return;
+      attempts++;
+
+      // Load/reload the JS file via <script> tag (works on file:// protocol)
+      delete window.__CRM_IMPORT_DATA;
+      const script = document.createElement('script');
+      script.src = 'crm-import-data.js?_=' + Date.now();
+      script.onload = () => {
+        try {
+          const raw = window.__CRM_IMPORT_DATA;
+          const data = raw && raw.data ? raw.data : raw;
+          // Accept only if written after we triggered the scan
+          if(data && raw && raw.ts && raw.ts >= scanStart) {
+            if(!cancelled) { setForm(buildForm(data)); setWaiting(false); clearTimeout(waitTimer.current); }
+            return;
+          }
+        } catch(e) {}
+        // Not fresh yet — keep polling or give up
+        if(attempts < maxAttempts) { setTimeout(pollForData, pollInterval); }
+        else { tryFirebase(); }
+      };
+      script.onerror = () => {
+        if(attempts < maxAttempts) { setTimeout(pollForData, pollInterval); }
+        else { tryFirebase(); }
+      };
+      document.head.appendChild(script);
+    }
+
+    async function tryFirebase() {
+      if(cancelled) return;
+      try {
+        const pending = await fbRestGet('pending_imports');
+        if(pending && !cancelled) {
+          const keys = Object.keys(pending);
+          if(keys.length > 0) {
+            const key = keys[keys.length - 1];
+            const val = pending[key];
+            if(val) {
+              setForm(buildForm(val));
+              setWaiting(false);
+              clearTimeout(waitTimer.current);
+              fbRestRemove('pending_imports/' + key);
+              return;
+            }
+          }
+        }
+      } catch(e) {}
+      // Everything failed — show manual options
+      if(!cancelled) setWaiting(false);
+    }
+
+    // Start polling after a short delay to let the PS1 script fire
+    setTimeout(pollForData, 800);
+
+    // Safety timeout
+    waitTimer.current = setTimeout(() => { if(!cancelled) setWaiting(false); }, 8000);
+    return () => { cancelled = true; clearTimeout(waitTimer.current); };
   }, []);
 
   // Check for duplicates when form loads
@@ -1465,8 +1538,8 @@ function ImportQuoteModal({onClose,addLead,leads,initialData}) {
       <h3 style={{fontFamily:"var(--font-display)",fontSize:22,fontWeight:600,marginBottom:20}}>Import Quote from Access</h3>
 
       {waiting && !form && (<div style={{textAlign:"center",padding:"32px 0"}}>
-        <div style={{fontSize:28,marginBottom:12,animation:"coldPulse 1.5s ease-in-out infinite"}}>Reading from Access...</div>
-        <div className="text-sm" style={{marginBottom:16}}>Getting the current quote. This takes a couple seconds.</div>
+        <div style={{fontSize:28,marginBottom:12,animation:"coldPulse 1.5s ease-in-out infinite"}}>Scanning Access...</div>
+        <div className="text-sm" style={{marginBottom:16}}>Reading the current quote. This takes a couple seconds.</div>
         <button onClick={handlePaste} className="btn-action" style={{background:"var(--accent)",color:"var(--primary)",padding:"10px 24px",fontSize:13,borderRadius:8}}>Paste from Clipboard</button>
         <div className="text-xs" style={{marginTop:8}}>Already ran the export? Click above to paste.</div>
       </div>)}
