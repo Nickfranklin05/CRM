@@ -12,9 +12,7 @@
   <script src="https://unpkg.com/prop-types@15/prop-types.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <!-- Firebase SDK not used — all operations use REST API + EventSource for file:// compatibility -->
   <style>
     :root {
       --primary:#1B4332; --primary-lt:#2D6A4F; --accent:#D4A017; --accent-lt:#E8C547;
@@ -143,12 +141,126 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "70117836937",
   appId: "1:70117836937:web:9132498369360dbd9b5e58"
 };
-firebase.initializeApp(FIREBASE_CONFIG);
-const fbAuth = firebase.auth();
-const fbDb = firebase.database();
-const fbLeadsRef = fbDb.ref('leads');
-const fbImportsRef = fbDb.ref('pending_imports');
+// All Firebase operations use REST API + EventSource (no SDK — works on file://)
+
+// ═══════════════════════════════════
+// ── AUTH (REST-based) ──
+// ═══════════════════════════════════
 const FB_AUTH_EMAIL = 'crm@lfpease.com';
+const FB_TOKEN_SK = 'lfpease-crm-fb-token';
+const FB_DB_URL = FIREBASE_CONFIG.databaseURL;
+let _fbIdToken = null;
+let _fbRefreshToken = null;
+let _fbAuthUser = null;
+let _fbAuthListeners = [];
+let _fbRefreshInterval = null;
+
+function _fbSetAuth(idToken, refreshToken) {
+  _fbIdToken = idToken;
+  _fbRefreshToken = refreshToken;
+  _fbAuthUser = idToken ? { uid: 'crm-shared', email: FB_AUTH_EMAIL } : null;
+  try { if (refreshToken) localStorage.setItem(FB_TOKEN_SK, refreshToken); else localStorage.removeItem(FB_TOKEN_SK); } catch {}
+  _fbAuthListeners.forEach(fn => fn(_fbAuthUser));
+  if (idToken && !_fbRefreshInterval) { _fbRefreshInterval = setInterval(_fbDoRefresh, 50 * 60 * 1000); }
+  else if (!idToken && _fbRefreshInterval) { clearInterval(_fbRefreshInterval); _fbRefreshInterval = null; }
+}
+
+async function _fbDoRefresh() {
+  if (!_fbRefreshToken) return false;
+  try {
+    const res = await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_CONFIG.apiKey}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({grant_type: 'refresh_token', refresh_token: _fbRefreshToken})
+    });
+    const data = await res.json();
+    if (data.id_token) {
+      _fbIdToken = data.id_token;
+      _fbRefreshToken = data.refresh_token;
+      try { localStorage.setItem(FB_TOKEN_SK, data.refresh_token); } catch {}
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// Restore session from stored refresh token (runs before React mounts)
+const _fbInitPromise = (async () => {
+  try {
+    const saved = localStorage.getItem(FB_TOKEN_SK);
+    if (!saved) return;
+    _fbRefreshToken = saved;
+    if (await _fbDoRefresh()) {
+      _fbAuthUser = { uid: 'crm-shared', email: FB_AUTH_EMAIL };
+      _fbRefreshInterval = setInterval(_fbDoRefresh, 50 * 60 * 1000);
+    }
+  } catch { try { localStorage.removeItem(FB_TOKEN_SK); } catch {} }
+})();
+
+const fbAuth = {
+  get currentUser() { return _fbAuthUser; },
+  onAuthStateChanged(fn) {
+    _fbAuthListeners.push(fn);
+    _fbInitPromise.then(() => fn(_fbAuthUser));
+    return () => { _fbAuthListeners = _fbAuthListeners.filter(f => f !== fn); };
+  },
+  async signInWithEmailAndPassword(email, pw) {
+    let res = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_CONFIG.apiKey}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email, password: pw, returnSecureToken: true})
+    });
+    let data = await res.json();
+    if (data.error) {
+      const msg = data.error.message;
+      if (msg === 'EMAIL_NOT_FOUND' || msg === 'INVALID_LOGIN_CREDENTIALS') {
+        const r2 = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FIREBASE_CONFIG.apiKey}`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email, password: pw, returnSecureToken: true})
+        });
+        const d2 = await r2.json();
+        if (d2.error) {
+          if (d2.error.message === 'EMAIL_EXISTS') throw {code: 'auth/wrong-password', message: 'Wrong password'};
+          throw {code: 'auth/error', message: d2.error.message};
+        }
+        data = d2;
+      } else if (msg.includes('TOO_MANY')) {
+        throw {code: 'auth/too-many-requests', message: 'Too many attempts — wait a moment'};
+      } else { throw {code: 'auth/error', message: msg}; }
+    }
+    _fbSetAuth(data.idToken, data.refreshToken);
+    return { user: _fbAuthUser };
+  },
+  async signOut() { _fbSetAuth(null, null); }
+};
+
+// ═══════════════════════════════════
+// ── DATABASE (REST + EventSource) ──
+// ═══════════════════════════════════
+function _fbUrl(path) { return `${FB_DB_URL}/${path}.json?auth=${_fbIdToken}`; }
+
+// Firebase keys can't contain . $ # [ ] / — sanitize recursively
+function _fbSanitize(obj) {
+  if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(_fbSanitize);
+  const clean = {};
+  for (const [k, v] of Object.entries(obj)) {
+    const safe = k.replace(/[.$#\[\]\/]/g, '_') || '_';
+    clean[safe] = _fbSanitize(v);
+  }
+  return clean;
+}
+
+async function fbRestGet(path) {
+  if (!_fbIdToken) return null;
+  try { const r = await fetch(_fbUrl(path)); return r.ok ? await r.json() : null; } catch { return null; }
+}
+async function fbRestSet(path, data) {
+  if (!_fbIdToken) return;
+  try { await fetch(_fbUrl(path), { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(_fbSanitize(data)) }); } catch {}
+}
+async function fbRestRemove(path) {
+  if (!_fbIdToken) return;
+  try { await fetch(_fbUrl(path), { method:'DELETE' }); } catch {}
+}
 
 // ═══════════════════════
 // ── CONSTANTS & CONFIG ──
@@ -237,9 +349,9 @@ function objToLeads(obj) {
     return l;
   });
 }
-function fbWriteLead(lead) { try { fbLeadsRef.child(String(lead.id)).set(stripFiles(lead)); } catch(e) { console.warn('Firebase write failed:', e); } }
-function fbDeleteLead(id) { try { fbLeadsRef.child(String(id)).remove(); } catch(e) { console.warn('Firebase delete failed:', e); } }
-function fbWriteAll(leads) { try { fbLeadsRef.set(leadsToObj(leads)); } catch(e) { console.warn('Firebase write-all failed:', e); } }
+function fbWriteLead(lead) { fbRestSet('leads/' + String(lead.id), stripFiles(lead)); }
+function fbDeleteLead(id) { fbRestRemove('leads/' + String(id)); }
+function fbWriteAll(leads) { fbRestSet('leads', leadsToObj(leads)); }
 const tplKey = l => l.stage==="Lost"?"winback":l.stage==="Quote Sent"?"quote":l.stage==="New Lead"?"initial":"revival";
 
 // ═══════════════════════════
@@ -407,49 +519,12 @@ function LoginScreen({onLogin}) {
     if(!pw){setErr("Enter the team password");return;}
     setBusy(true);setErr("");
     try{
-      const apiKey=FIREBASE_CONFIG.apiKey;
-      // Verify password via REST API (works on any protocol including file://)
-      let res=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({email:FB_AUTH_EMAIL,password:pw,returnSecureToken:true})
-      });
-      let data=await res.json();
-      if(data.error){
-        const msg=data.error.message;
-        if(msg==='EMAIL_NOT_FOUND'||msg==='INVALID_LOGIN_CREDENTIALS'){
-          // Account may not exist yet (Firebase hides this behind generic error)
-          // Try creating the account — if it already exists, THEN the password was wrong
-          const signUpRes=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,{
-            method:'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({email:FB_AUTH_EMAIL,password:pw,returnSecureToken:true})
-          });
-          const signUpData=await signUpRes.json();
-          if(signUpData.error){
-            if(signUpData.error.message==='EMAIL_EXISTS'){
-              // Account exists — the original password was genuinely wrong
-              setErr("Wrong password");return;
-            }
-            throw new Error(signUpData.error.message);
-          }
-          data=signUpData; // Account created successfully
-        }else if(msg.includes('TOO_MANY')){setErr("Too many attempts — wait a moment");return;}
-        else{throw new Error(msg);}
-      }
-      // REST auth succeeded — now sign in the SDK so database listeners are authenticated
-      try{
-        await fbAuth.signInWithEmailAndPassword(FB_AUTH_EMAIL,pw);
-      }catch(sdkErr){
-        // SDK might fail on some setups — try creating account via SDK too
-        if(sdkErr.code==='auth/user-not-found'){
-          await fbAuth.createUserWithEmailAndPassword(FB_AUTH_EMAIL,pw);
-        }else{
-          console.warn('SDK auth failed (REST succeeded):',sdkErr.code);
-          throw sdkErr;
-        }
-      }
+      await fbAuth.signInWithEmailAndPassword(FB_AUTH_EMAIL,pw);
       onLogin(u);
     }catch(e){
-      setErr(e.message||"Authentication failed — check your internet connection");
+      if(e.code==='auth/wrong-password'){setErr("Wrong password");}
+      else if(e.code==='auth/too-many-requests'){setErr("Too many attempts — wait a moment");}
+      else{setErr(e.message||"Authentication failed");}
     }finally{setBusy(false);}
   };
 
@@ -1483,61 +1558,87 @@ function App() {
       fromFirebase.current=false;
       return; // Data came FROM Firebase — don't echo it back
     }
-    // Local change — push to Firebase
-    fbWriteAll(leads);
+    if(fbAuth.currentUser) fbWriteAll(leads);
   },[leads]);
 
-  // ── Firebase: connection status (gated behind auth) ──
+  // ── Firebase: real-time sync via EventSource + initial migration ──
   useEffect(()=>{
-    if(!fbAuth.currentUser)return;
-    const connRef=fbDb.ref('.info/connected');
-    const handler=snap=>setFbConnected(!!snap.val());
-    connRef.on('value',handler);
-    return()=>connRef.off('value',handler);
-  },[currentUser]);
+    if(!_fbIdToken)return;
+    let closed=false;
 
-  // ── Firebase: real-time sync + initial migration (gated behind auth) ──
-  useEffect(()=>{
-    if(!fbAuth.currentUser)return;
     // One-time check: if Firebase is empty, push our local data up
-    fbLeadsRef.once('value').then(snap=>{
-      if(!snap.val()){
-        const local=loadLocal()||SEED;
-        fbWriteAll(local);
+    fbRestGet('leads').then(data=>{
+      if(!data&&!closed){
+        fbWriteAll(loadLocal()||SEED);
       }
     });
 
-    // Real-time listener — receive changes from other clients
-    const handler=snap=>{
-      const fbLeads=objToLeads(snap.val());
+    // EventSource for real-time leads updates + connection status
+    const es=new EventSource(_fbUrl('leads'));
+    let fullData=null;
+    es.onopen=()=>setFbConnected(true);
+    es.onerror=()=>setFbConnected(false);
+    es.addEventListener('put',(e)=>{
+      const msg=JSON.parse(e.data);
+      if(msg.path==='/'){fullData=msg.data;}
+      else{
+        if(!fullData)fullData={};
+        const key=msg.path.replace(/^\//,'');
+        if(msg.data===null){delete fullData[key];}
+        else{fullData[key]=msg.data;}
+      }
+      if(fullData){
+        const fbLeads=objToLeads(fullData);
+        if(fbLeads&&fbLeads.length>0){
+          fromFirebase.current=true;
+          setLeads(prev=>{
+            const fileMap={};
+            prev.forEach(l=>{if(l.files?.length)fileMap[String(l.id)]=l.files;});
+            return fbLeads.map(l=>({...l,files:fileMap[String(l.id)]||l.files||[]}));
+          });
+        }
+      }
+    });
+    es.addEventListener('patch',(e)=>{
+      const msg=JSON.parse(e.data);
+      if(!fullData)fullData={};
+      if(msg.path==='/'){Object.assign(fullData,msg.data);}
+      else{
+        const key=msg.path.replace(/^\//,'');
+        fullData[key]={...(fullData[key]||{}),...msg.data};
+      }
+      const fbLeads=objToLeads(fullData);
       if(fbLeads&&fbLeads.length>0){
         fromFirebase.current=true;
         setLeads(prev=>{
-          // Merge files from local leads (base64 files stay localStorage-only)
           const fileMap={};
           prev.forEach(l=>{if(l.files?.length)fileMap[String(l.id)]=l.files;});
           return fbLeads.map(l=>({...l,files:fileMap[String(l.id)]||l.files||[]}));
         });
       }
-    };
-    fbLeadsRef.on('value',handler);
-    return()=>fbLeadsRef.off('value',handler);
+    });
+    return()=>{closed=true;es.close();};
   },[currentUser]);
 
-  // ── Firebase: pending_imports listener (gated behind auth) ──
+  // ── Firebase: pending_imports listener via EventSource ──
   useEffect(()=>{
-    if(!fbAuth.currentUser)return;
-    const handler=snap=>{
-      const data=snap.val();
-      if(data){
-        setImportData(data);
-        setShowImport(true);
-        // Remove the import entry after reading it
-        snap.ref.remove();
+    if(!_fbIdToken)return;
+    const es=new EventSource(_fbUrl('pending_imports'));
+    const seen=new Set();
+    es.addEventListener('put',(e)=>{
+      const msg=JSON.parse(e.data);
+      if(msg.path==='/'&&msg.data){
+        // Full data — process new keys
+        Object.entries(msg.data).forEach(([key,val])=>{
+          if(!seen.has(key)&&val){seen.add(key);setImportData(val);setShowImport(true);fbRestRemove('pending_imports/'+key);}
+        });
+      }else if(msg.path!=='/'&&msg.data){
+        // Single new import
+        const key=msg.path.replace(/^\//,'');
+        if(!seen.has(key)){seen.add(key);setImportData(msg.data);setShowImport(true);fbRestRemove('pending_imports/'+key);}
       }
-    };
-    fbImportsRef.on('child_added',handler);
-    return()=>fbImportsRef.off('child_added',handler);
+    });
+    return()=>es.close();
   },[currentUser]);
 
   // ── Per-user lead filtering ──
