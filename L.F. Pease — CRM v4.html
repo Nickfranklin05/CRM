@@ -1555,7 +1555,9 @@ function LeadModal({lead,onClose,update,del,logActivity,addFile,delFile,archive,
             <button onClick={doSave} className="btn-primary" style={{flex:1}}>Save Changes</button>
             <button onClick={()=>{setForm({...lead});setEditing(false)}} className="btn-outline">Cancel</button>
           </>) : (<>
-            <button onClick={()=>setEditing(true)} className="btn-primary" style={{flex:1}}>Edit Lead</button>
+            <button onClick={()=>setEditing(true)} className="btn-primary" style={{padding:"8px 14px",fontSize:12}}>Edit Lead</button>
+            {!lead.archived&&lead.stage==="New Lead"&&<button onClick={()=>{update(lead.id,{stage:"Contacted"});logActivity(lead.id,{type:"note",text:"Moved to Contacted",date:now(),by:lead.rep})}} className="btn-action" style={{background:"rgba(124,58,237,.1)",color:"var(--contacted)",padding:"8px 14px",fontSize:12}}>Contacted</button>}
+            {!lead.archived&&["New Lead","Contacted"].includes(lead.stage)&&<button onClick={()=>{update(lead.id,{stage:"Quote Sent"});logActivity(lead.id,{type:"note",text:"Moved to Quote Sent",date:now(),by:lead.rep})}} className="btn-action" style={{background:"rgba(217,119,6,.1)",color:"var(--quote)",padding:"8px 14px",fontSize:12}}>Quoted</button>}
             {!lead.archived&&!["Won","Lost"].includes(lead.stage)&&<><button onClick={()=>update(lead.id,{stage:"Won"})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>Won</button><button onClick={()=>update(lead.id,{stage:"Lost"})} className="btn-action" style={{background:"rgba(155,44,44,.08)",color:"var(--lost)",padding:"10px 16px",fontSize:13}}>Lost</button></>}
             {!lead.archived&&lead.stage==="Lost"&&<button onClick={()=>update(lead.id,{stage:"Contacted",closedAt:null,revivalDismissed:false})} className="btn-action" style={{background:"rgba(45,106,79,.1)",color:"var(--won)",padding:"10px 16px",fontSize:13}}>♻️ Re-open</button>}
             {canArchive(lead)&&<button onClick={()=>archive(lead.id)} title="Archive" className="icon-btn" style={{fontSize:18}}>📦</button>}
